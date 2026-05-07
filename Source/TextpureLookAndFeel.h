@@ -27,8 +27,8 @@ public:
     {
         float pulse = 0.1f + (audioLevel * 0.4f);
         
-        // Turquoise interpolation
-        auto baseColor = juce::Colours::white.interpolatedWith(juce::Colours::turquoise, juce::jlimit(0.0f, 1.0f, audioLevel * 1.5f));
+        // Blue interpolation
+        auto baseColor = juce::Colours::white.interpolatedWith(juce::Colours::blue, juce::jlimit(0.0f, 1.0f, audioLevel * 1.5f));
         
         auto outline = baseColor.withAlpha(slider.isEnabled() ? (0.1f + pulse) : 0.05f);
         auto fill = slider.isEnabled() ? baseColor.withAlpha(0.6f + pulse) : juce::Colours::grey.withAlpha(0.3f);
@@ -64,7 +64,7 @@ public:
         auto tickArea = bounds.removeFromLeft(bounds.getHeight()).reduced(4);
 
         float pulse = audioLevel * 0.5f;
-        auto baseColor = juce::Colours::white.interpolatedWith(juce::Colours::turquoise, juce::jlimit(0.0f, 1.0f, audioLevel * 1.5f));
+        auto baseColor = juce::Colours::white.interpolatedWith(juce::Colours::blue, juce::jlimit(0.0f, 1.0f, audioLevel * 1.5f));
         
         auto fill = button.getToggleState() ? baseColor.withAlpha(0.7f + pulse) : baseColor.withAlpha(0.1f + pulse * 0.2f);
         

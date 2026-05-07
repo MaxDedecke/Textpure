@@ -65,8 +65,8 @@ void ParticleSwarm::paint(juce::Graphics& g)
     auto bounds = getLocalBounds().toFloat();
     float pulse = 1.0f + (audioLevel * 0.5f);
     
-    // Turquoise interpolation for the whole swarm
-    auto baseColor = juce::Colours::white.interpolatedWith(juce::Colours::turquoise, juce::jlimit(0.0f, 1.0f, audioLevel * 1.5f));
+    // Blue interpolation for the whole swarm
+    auto baseColor = juce::Colours::white.interpolatedWith(juce::Colours::blue, juce::jlimit(0.0f, 1.0f, audioLevel * 1.5f));
     
     float threshold = connectionThreshold * (0.5f + sizeAmount);
 
