@@ -1,12 +1,4 @@
-/*
-  ==============================================================================
-
-    This file contains the basic framework code for a JUCE plugin processor.
-
-  ==============================================================================
-*/
-
-#include "PluginProcessor.h"
+﻿#include "PluginProcessor.h"
 #include "PluginEditor.h"
 
 //==============================================================================
@@ -15,10 +7,9 @@ NewProjectAudioProcessor::NewProjectAudioProcessor()
                         .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
                         .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
                        ),
-       apvts(*this, nullptr, "PARAMETERS", createParameters())
+       apvts(*this, nullptr, "PARAMETERS", createParameters()),
+       granularEngine(40)
 {
-    grains.resize(maxGrains);
-    DBG("TEXTPURE: Constructor called");
 }
 
 NewProjectAudioProcessor::~NewProjectAudioProcessor() {}
@@ -26,6 +17,7 @@ NewProjectAudioProcessor::~NewProjectAudioProcessor() {}
 juce::AudioProcessorValueTreeState::ParameterLayout NewProjectAudioProcessor::createParameters()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+    
     params.push_back(std::make_unique<juce::AudioParameterFloat>("SIZE", "Grain Size", 10.0f, 500.0f, 100.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("DENSITY", "Density", 1.0f, 50.0f, 20.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("PITCH", "Pitch", 0.5f, 2.0f, 1.0f));
@@ -44,6 +36,82 @@ juce::AudioProcessorValueTreeState::ParameterLayout NewProjectAudioProcessor::cr
 
     return { params.begin(), params.end() };
 }
+
+void NewProjectAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
+{
+    granularEngine.prepare(sampleRate, samplesPerBlock);
+    reverb.setSampleRate(sampleRate);
+}
+
+void NewProjectAudioProcessor::releaseResources() {}
+
+bool NewProjectAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const {
+    auto mainIn = layouts.getMainInputChannelSet();
+    auto mainOut = layouts.getMainOutputChannelSet();
+    
+    if (mainOut != juce::AudioChannelSet::mono() && mainOut != juce::AudioChannelSet::stereo()) return false;
+    if (mainIn != mainOut) return false;
+    
+    return true;
+}
+
+void NewProjectAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
+{
+    juce::ScopedNoDenormals noDenormals;
+    auto numSamples = buffer.getNumSamples();
+    auto numChannels = buffer.getNumChannels();
+
+    if (getSampleRate() <= 0) return;
+
+    // --- 1. Get Parameters ---
+    const float mix = apvts.getRawParameterValue("MIX")->load();
+    const float reverbValue = apvts.getRawParameterValue("REVERB")->load();
+    const float textureValue = apvts.getRawParameterValue("TEXTURE")->load();
+    const bool reverbBypass = apvts.getRawParameterValue("REVERB_BYPASS")->load() > 0.5f;
+    const bool textureBypass = apvts.getRawParameterValue("TEXTURE_BYPASS")->load() > 0.5f;
+
+    const float effectivePitch = (apvts.getRawParameterValue("PITCH_BYPASS")->load() > 0.5f) ? 1.0f : apvts.getRawParameterValue("PITCH")->load();
+    const float effectiveSize = (apvts.getRawParameterValue("SIZE_BYPASS")->load() > 0.5f) ? 100.0f : apvts.getRawParameterValue("SIZE")->load();
+    const float effectiveDensity = (apvts.getRawParameterValue("DENSITY_BYPASS")->load() > 0.5f) ? 20.0f : apvts.getRawParameterValue("DENSITY")->load();
+
+    // --- 2. Keep Dry Signal ---
+    juce::AudioBuffer<float> dryBuffer;
+    dryBuffer.makeCopyOf(buffer);
+
+    // --- 3. Process Granular ---
+    granularEngine.process(buffer, effectiveSize, effectiveDensity, effectivePitch, textureValue, textureBypass);
+
+    // --- 4. Mix Dry/Wet ---
+    for (int ch = 0; ch < numChannels; ++ch)
+    {
+        buffer.applyGain(ch, 0, numSamples, mix);
+        buffer.addFrom(ch, 0, dryBuffer, ch, 0, numSamples, 1.0f - mix);
+    }
+
+    // --- 5. Reverb ---
+    if (!reverbBypass && reverbValue > 0.01f && numChannels >= 2)
+    {
+        updateReverbParameters(reverbValue);
+        reverb.processStereo(buffer.getWritePointer(0), buffer.getWritePointer(1), numSamples);
+    }
+}
+
+void NewProjectAudioProcessor::updateReverbParameters(float reverbValue)
+{
+    reverbParams.dryLevel = 1.0f;
+    reverbParams.wetLevel = reverbValue;
+    reverbParams.roomSize = 0.5f + (reverbValue * 0.4f);
+    reverb.setParameters(reverbParams);
+}
+
+const juce::String NewProjectAudioProcessor::getName() const { return JucePlugin_Name; }
+int NewProjectAudioProcessor::getNumPrograms() { return 6; }
+int NewProjectAudioProcessor::getCurrentProgram() { return (int)apvts.getRawParameterValue("PRESET")->load(); }
+const juce::String NewProjectAudioProcessor::getProgramName (int index) {
+    juce::StringArray names = { "Default", "Dark Clouds", "Digital Grit", "Ghost Melodies", "Subtle Texture", "Trap Shimmer" };
+    return names[index];
+}
+void NewProjectAudioProcessor::changeProgramName (int index, const juce::String& newName) {}
 
 void NewProjectAudioProcessor::setCurrentProgram (int index)
 {
@@ -73,147 +141,8 @@ void NewProjectAudioProcessor::setCurrentProgram (int index)
     }
 }
 
-const juce::String NewProjectAudioProcessor::getName() const { return JucePlugin_Name; }
-int NewProjectAudioProcessor::getNumPrograms() { return 6; }
-int NewProjectAudioProcessor::getCurrentProgram() { return (int)apvts.getRawParameterValue("PRESET")->load(); } 
-const juce::String NewProjectAudioProcessor::getProgramName (int index) {
-    juce::StringArray names = { "Default", "Dark Clouds", "Digital Grit", "Ghost Melodies", "Subtle Texture", "Trap Shimmer" };
-    return names[index];
-}
-void NewProjectAudioProcessor::changeProgramName (int index, const juce::String& newName) {}
-
-void NewProjectAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
-{
-    DBG("TEXTPURE: prepareToPlay - SR: " << sampleRate << " B: " << samplesPerBlock);
-
-    // 2 Sekunden Puffer fuer mehr Stabilitaet
-    circularBuffer.setSize(2, (int)(sampleRate * 2.0));
-    circularBuffer.clear();
-    writePosition = 0; samplesSinceLastGrain = 0;
-    for (auto& g : grains) g.reset();
-    reverb.setSampleRate(sampleRate);
-}
-
-void NewProjectAudioProcessor::releaseResources() {}
-
-bool NewProjectAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const {
-    auto mainIn = layouts.getMainInputChannelSet();
-    auto mainOut = layouts.getMainOutputChannelSet();
-    
-    if (mainOut != juce::AudioChannelSet::mono() && mainOut != juce::AudioChannelSet::stereo()) return false;
-    if (mainIn != mainOut) return false;
-    
-    return true;
-}
-
-void NewProjectAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)  
-{
-    juce::ScopedNoDenormals noDenormals;
-    auto totalNumInputChannels  = getTotalNumInputChannels();
-    auto totalNumOutputChannels = getTotalNumOutputChannels();
-    auto numSamples = buffer.getNumSamples();
-    auto numChannels = buffer.getNumChannels();
-
-    if (getSampleRate() <= 0) return;
-
-    // Parameter laden
-    float mix = apvts.getRawParameterValue("MIX")->load();
-    float reverbValue = apvts.getRawParameterValue("REVERB")->load();
-    float textureValue = apvts.getRawParameterValue("TEXTURE")->load();
-    bool reverbBypass = apvts.getRawParameterValue("REVERB_BYPASS")->load() > 0.5f;
-    bool textureBypass = apvts.getRawParameterValue("TEXTURE_BYPASS")->load() > 0.5f;
-
-    // Granular Params
-    float effectivePitch = (apvts.getRawParameterValue("PITCH_BYPASS")->load() > 0.5f) ? 1.0f : apvts.getRawParameterValue("PITCH")->load();
-    float effectiveSize = (apvts.getRawParameterValue("SIZE_BYPASS")->load() > 0.5f) ? 100.0f : apvts.getRawParameterValue("SIZE")->load();
-    float effectiveDensity = (apvts.getRawParameterValue("DENSITY_BYPASS")->load() > 0.5f) ? 20.0f : apvts.getRawParameterValue("DENSITY")->load();
-
-    int circularBufferSize = circularBuffer.getNumSamples();
-    int grainDurationSamples = (int)(getSampleRate() * (effectiveSize / 1000.0f));
-    float grainIntervalSamples = (float)getSampleRate() / effectiveDensity;
-
-    float totalLevel = 0.0f;
-
-    for (int sample = 0; sample < numSamples; ++sample)
-    {
-        // Sicherer Zugriff auf Input
-        float inL = (numChannels > 0) ? buffer.getSample(0, sample) : 0.0f;
-        float inR = (numChannels > 1) ? buffer.getSample(1, sample) : inL;
-
-        circularBuffer.setSample(0, writePosition, inL);
-        circularBuffer.setSample(1, writePosition, inR);
-        totalLevel += std::abs(inL);
-
-        // Grain Spawning
-        samplesSinceLastGrain++;
-        if (samplesSinceLastGrain >= grainIntervalSamples)
-        {
-            samplesSinceLastGrain = 0;
-            for (auto& g : grains) {
-                if (!g.isActive) {
-                    g.isActive = true;
-                    g.durationSamples = juce::jmax(10, grainDurationSamples);
-                    g.ageSamples = 0;
-                    g.pitch = effectivePitch;
-
-                    float jitter = textureBypass ? 0.0f : (juce::Random::getSystemRandom().nextFloat() - 0.5f) * textureValue * 5000.0f;
-                    g.startSample = (float)writePosition - (g.durationSamples * g.pitch) - 500.0f - jitter;     
-
-                    while (g.startSample < 0) g.startSample += (float)circularBufferSize;
-                    g.currentSample = g.startSample;
-                    break;
-                }
-            }
-        }
-
-        // Grains berechnen
-        float grainOutL = 0, grainOutR = 0;
-        int activeGrains = 0;
-        for (auto& g : grains) {
-            if (g.isActive) {
-                grainOutL += g.getSampleForChannel(circularBuffer, 0, circularBufferSize);
-                grainOutR += g.getSampleForChannel(circularBuffer, 1, circularBufferSize);
-                g.updateState(circularBufferSize);
-                activeGrains++;
-            }
-        }
-
-        // Normalisierung
-        if (activeGrains > 0) {
-            float norm = 1.0f / std::sqrt((float)activeGrains);
-            grainOutL *= norm;
-            grainOutR *= norm;
-        }
-
-        // Texture
-        if (!textureBypass && textureValue > 0.05f) {
-            float drive = 1.0f + textureValue * 2.0f;
-            grainOutL = std::tanh(grainOutL * drive);
-            grainOutR = std::tanh(grainOutR * drive);
-        }
-
-        // Finaler Output
-        if (totalNumOutputChannels > 0) buffer.setSample(0, sample, (inL * (1.0f - mix)) + (grainOutL * mix));  
-        if (totalNumOutputChannels > 1) buffer.setSample(1, sample, (inR * (1.0f - mix)) + (grainOutR * mix));  
-
-        writePosition = (writePosition + 1) % circularBufferSize;
-    }
-
-    // Reverb (Post-Mix)
-    if (!reverbBypass && reverbValue > 0.01f && totalNumOutputChannels >= 2) {
-        reverbParams.dryLevel = 1.0f;
-        reverbParams.wetLevel = reverbValue;
-        reverbParams.roomSize = 0.5f + (reverbValue * 0.4f);
-        reverb.setParameters(reverbParams);
-        reverb.processStereo(buffer.getWritePointer(0), buffer.getWritePointer(1), buffer.getNumSamples());
-    }
-
-    // Animation Update
-    currentLevel.store(totalLevel / (float)buffer.getNumSamples());
-}
-
-bool NewProjectAudioProcessor::hasEditor() const { return true; }
 juce::AudioProcessorEditor* NewProjectAudioProcessor::createEditor() { return new NewProjectAudioProcessorEditor (*this); }
+bool NewProjectAudioProcessor::hasEditor() const { return true; }
 
 void NewProjectAudioProcessor::getStateInformation (juce::MemoryBlock& destData) {
     auto state = apvts.copyState(); std::unique_ptr<juce::XmlElement> xml (state.createXml()); copyXmlToBinary (*xml, destData);

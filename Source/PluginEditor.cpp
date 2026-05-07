@@ -65,8 +65,9 @@ NewProjectAudioProcessorEditor::~NewProjectAudioProcessorEditor() { setLookAndFe
 
 void NewProjectAudioProcessorEditor::timerCallback()
 {
-    float level = audioProcessor.currentLevel.load();
-    float targetGlow = juce::jmin(1.0f, level * 15.0f); // Noch höhere Sensitivität
+    float level = audioProcessor.getCurrentLevel();
+    float targetGlow = juce::jmin(1.0f, level * 15.0f); // Noch hÃ¶here SensitivitÃ¤t
+
     currentGlow = currentGlow + (targetGlow - currentGlow) * 0.15f;
     customLookAndFeel.glowAmount = currentGlow;
     repaint();

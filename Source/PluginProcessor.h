@@ -1,12 +1,4 @@
-/*
-  ==============================================================================
-
-    This file contains the basic framework code for a JUCE plugin processor.
-
-  ==============================================================================
-*/
-
-#pragma once
+﻿#pragma once
 
 #include <JuceHeader.h>
 #include "GranularEngine.h"
@@ -55,10 +47,9 @@ private:
     void updateReverbParameters(float reverbValue);
 
     GranularEngine granularEngine;
-
+    
     juce::Reverb reverb;
     juce::Reverb::Parameters reverbParams;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(NewProjectAudioProcessor)
 };
-
