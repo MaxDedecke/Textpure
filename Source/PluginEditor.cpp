@@ -79,7 +79,7 @@ void NewProjectAudioProcessorEditor::paint (juce::Graphics& g)
     g.setFont(juce::Font("Impact", 32.0f, juce::Font::plain));
     g.drawText("TEXTPURE", headerArea, juce::Justification::centredLeft);
     
-    g.setFont(12.0f);
+    g.setFont(juce::Font("Impact", 12.0f, juce::Font::plain));
     g.drawText("PROD BY JMD", headerArea, juce::Justification::centredRight);
     
     g.setColour(juce::Colours::white.withAlpha(0.1f));
@@ -111,7 +111,7 @@ void NewProjectAudioProcessorEditor::resized()
     mixSlider.setBounds(rightControls.removeFromTop(h).reduced(10));
     
     // Bottom Area
-    presetSelector.setBounds(bottomArea.withSizeKeepingCentre(200, 30));
+    presetSelector.setBounds(bottomArea.withSizeKeepingCentre(300, 40));
     
     // Tiny bypass buttons near sliders
     auto placeBypass = [](juce::Slider& s, juce::ToggleButton& b) {
