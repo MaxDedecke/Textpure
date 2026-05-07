@@ -1,0 +1,14 @@
+﻿# JUCE .gitignore
+Builds/
+JuceLibraryCode/
+.vs/
+x64/
+Debug/
+Release/
+*.exe
+*.dll
+*.vst3
+*.pdb
+*.suo
+*.user
+.DS_Store
