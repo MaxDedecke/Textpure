@@ -57,13 +57,35 @@ void GranularEngine::prepare(double sampleRate, int maxBlockSize)
 
 void GranularEngine::process(juce::AudioBuffer<float>& buffer, 
                              float sizeMs, float density, float pitch, 
-                             float texture, bool textureBypass)
+                             float texture, bool textureBypass,
+                             bool syncEnabled, int rateIndex, double bpm)
 {
     const int numSamples = buffer.getNumSamples();
     const int numChannels = buffer.getNumChannels();
     const int circularBufferSize = circularBuffer.getNumSamples();
     
-    float grainIntervalSamples = (float)currentSampleRate / density;
+    float grainIntervalSamples;
+    
+    if (syncEnabled && bpm > 0)
+    {
+        // 0=1/4, 1=1/4T, 2=1/4D, 3=1/8, 4=1/8T, 5=1/8D, 6=1/16, 7=1/16T, 8=1/16D, 9=1/32, 10=1/64, 11=1/128
+        float divisions[] = { 
+            1.0f, 2.0f/3.0f, 1.5f,              // 1/4
+            0.5f, 1.0f/3.0f, 0.75f,             // 1/8
+            0.25f, 0.5f/3.0f, 0.375f,           // 1/16
+            0.125f, 0.0625f, 0.03125f           // 1/32, 1/64, 1/128
+        };
+        float division = divisions[juce::jlimit(0, 11, rateIndex)];
+        
+        float secondsPerBeat = 60.0f / (float)bpm;
+        float syncIntervalSeconds = secondsPerBeat * division;
+        grainIntervalSamples = syncIntervalSeconds * (float)currentSampleRate;
+    }
+    else
+    {
+        grainIntervalSamples = (float)currentSampleRate / density;
+    }
+
     float totalLevel = 0.0f;
 
     for (int sample = 0; sample < numSamples; ++sample)

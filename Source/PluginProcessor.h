@@ -8,7 +8,8 @@
     The main AudioProcessor for the TEXTPURE plugin.
     Acts as an orchestrator between the host, the granular engine, and effects.
 */
-class NewProjectAudioProcessor  : public juce::AudioProcessor
+class NewProjectAudioProcessor  : public juce::AudioProcessor,
+                                 public juce::AudioProcessorValueTreeState::Listener
 {
 public:
     NewProjectAudioProcessor();
@@ -19,6 +20,9 @@ public:
     void releaseResources() override;
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+
+    // --- APVTS::Listener Overrides ---
+    void parameterChanged (const juce::String& parameterID, float newValue) override;
 
     // --- UI and State ---
     juce::AudioProcessorEditor* createEditor() override;
@@ -50,6 +54,8 @@ private:
     
     juce::Reverb reverb;
     juce::Reverb::Parameters reverbParams;
+
+    std::atomic<bool> isUpdatingPresets{ false };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(NewProjectAudioProcessor)
 };

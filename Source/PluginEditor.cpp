@@ -29,6 +29,11 @@ NewProjectAudioProcessorEditor::NewProjectAudioProcessorEditor (NewProjectAudioP
     textureBypassButton.setButtonText(""); addAndMakeVisible(textureBypassButton);
     reverbBypassButton.setButtonText(""); addAndMakeVisible(reverbBypassButton);
 
+    syncButton.setButtonText(""); addAndMakeVisible(syncButton);
+    rateSelector.addItemList(audioProcessor.apvts.getParameter("RATE")->getAllValueStrings(), 1);
+    addAndMakeVisible(rateSelector);
+    rateSelector.setJustificationType(juce::Justification::centred);
+
     presetSelector.addItemList(audioProcessor.apvts.getParameter("PRESET")->getAllValueStrings(), 1);
     addAndMakeVisible(presetSelector);
     presetSelector.setJustificationType(juce::Justification::centred);
@@ -46,6 +51,8 @@ NewProjectAudioProcessorEditor::NewProjectAudioProcessorEditor (NewProjectAudioP
     textureBypassAttachment = std::make_unique<ButtonAttachment>(audioProcessor.apvts, "TEXTURE_BYPASS", textureBypassButton);
     reverbBypassAttachment = std::make_unique<ButtonAttachment>(audioProcessor.apvts, "REVERB_BYPASS", reverbBypassButton);
     
+    syncAttachment = std::make_unique<ButtonAttachment>(audioProcessor.apvts, "SYNC", syncButton);
+    rateAttachment = std::make_unique<ChoiceAttachment>(audioProcessor.apvts, "RATE", rateSelector);
     presetAttachment = std::make_unique<ChoiceAttachment>(audioProcessor.apvts, "PRESET", presetSelector);
 
     startTimerHz(60); 
@@ -58,6 +65,8 @@ void NewProjectAudioProcessorEditor::timerCallback()
 {
     float level = audioProcessor.getCurrentLevel();
     
+    customLookAndFeel.setAudioLevel(level);
+
     swarm.setParameters(
         audioProcessor.apvts.getRawParameterValue("DENSITY")->load(),
         audioProcessor.apvts.getRawParameterValue("TEXTURE")->load(),
@@ -65,6 +74,20 @@ void NewProjectAudioProcessorEditor::timerCallback()
         audioProcessor.apvts.getRawParameterValue("PITCH")->load(),
         level
     );
+
+    // Visual Bypass Feedback
+    sizeSlider.setEnabled(audioProcessor.apvts.getRawParameterValue("SIZE_BYPASS")->load() < 0.5f);
+    densitySlider.setEnabled(audioProcessor.apvts.getRawParameterValue("DENSITY_BYPASS")->load() < 0.5f);
+    pitchSlider.setEnabled(audioProcessor.apvts.getRawParameterValue("PITCH_BYPASS")->load() < 0.5f);
+    textureSlider.setEnabled(audioProcessor.apvts.getRawParameterValue("TEXTURE_BYPASS")->load() < 0.5f);
+    reverbSlider.setEnabled(audioProcessor.apvts.getRawParameterValue("REVERB_BYPASS")->load() < 0.5f);
+
+    // Sync/Rate visibility logic
+    bool isSync = audioProcessor.apvts.getRawParameterValue("SYNC")->load() > 0.5f;
+    rateSelector.setVisible(isSync);
+    densitySlider.setVisible(!isSync);
+
+    repaint();
 }
 
 void NewProjectAudioProcessorEditor::paint (juce::Graphics& g)
@@ -113,6 +136,11 @@ void NewProjectAudioProcessorEditor::resized()
     // Bottom Area
     presetSelector.setBounds(bottomArea.withSizeKeepingCentre(300, 40));
     
+    // Position Sync controls over/near density slider
+    auto densityBounds = densitySlider.getBounds();
+    syncButton.setBounds(densityBounds.removeFromTop(15).removeFromRight(15));
+    rateSelector.setBounds(densityBounds.withSizeKeepingCentre(80, 20));
+
     // Tiny bypass buttons near sliders
     auto placeBypass = [](juce::Slider& s, juce::ToggleButton& b) {
         b.setBounds(s.getBounds().removeFromTop(15).removeFromRight(15));
@@ -123,4 +151,7 @@ void NewProjectAudioProcessorEditor::resized()
     placeBypass(pitchSlider, pitchBypassButton);
     placeBypass(textureSlider, textureBypassButton);
     placeBypass(reverbSlider, reverbBypassButton);
+    
+    // Minimalist Preset Selector
+    presetSelector.setBounds(bottomArea.withSizeKeepingCentre(180, 25));
 }

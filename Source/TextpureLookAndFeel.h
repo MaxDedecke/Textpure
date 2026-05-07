@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <JuceHeader.h>
 
 class TextpureLookAndFeel : public juce::LookAndFeel_V4
@@ -7,30 +7,33 @@ public:
     TextpureLookAndFeel()
     {
         setColour(juce::Slider::thumbColourId, juce::Colours::white);
-        setColour(juce::Slider::trackColourId, juce::Colour(0xFF00E5FF)); // Turquoise
+        setColour(juce::Slider::trackColourId, juce::Colours::white); 
         
-        setColour(juce::ComboBox::backgroundColourId, juce::Colours::black);
+        setColour(juce::ComboBox::backgroundColourId, juce::Colour(0xFF0A0A0A));
         setColour(juce::ComboBox::textColourId, juce::Colours::white);
-        setColour(juce::ComboBox::outlineColourId, juce::Colours::white.withAlpha(0.5f));
-        setColour(juce::ComboBox::arrowColourId, juce::Colour(0xFF00E5FF));
+        setColour(juce::ComboBox::outlineColourId, juce::Colours::white.withAlpha(0.1f));
+        setColour(juce::ComboBox::arrowColourId, juce::Colours::white.withAlpha(0.6f));
         
-        setColour(juce::PopupMenu::backgroundColourId, juce::Colours::black);
+        setColour(juce::PopupMenu::backgroundColourId, juce::Colour(0xFF0A0A0A));
         setColour(juce::PopupMenu::textColourId, juce::Colours::white);
-        setColour(juce::PopupMenu::highlightedBackgroundColourId, juce::Colour(0xFF00E5FF));
+        setColour(juce::PopupMenu::highlightedBackgroundColourId, juce::Colours::white);
         setColour(juce::PopupMenu::highlightedTextColourId, juce::Colours::black);
     }
+
+    void setAudioLevel(float level) { audioLevel = level; }
 
     void drawRotarySlider(juce::Graphics& g, int x, int y, int width, int height, float sliderPos,
                           const float startAngle, const float endAngle, juce::Slider& slider) override
     {
-        auto outline = juce::Colours::white.withAlpha(0.2f);
-        auto fill = juce::Colour(0xFF00E5FF);
+        float pulse = 0.1f + (audioLevel * 0.4f);
+        auto outline = juce::Colours::white.withAlpha(slider.isEnabled() ? (0.1f + pulse) : 0.05f);
+        auto fill = slider.isEnabled() ? juce::Colours::white.withAlpha(0.6f + pulse) : juce::Colours::grey.withAlpha(0.3f);
 
         auto bounds = juce::Rectangle<int>(x, y, width, height).toFloat().reduced(10);
         auto radius = juce::jmin(bounds.getWidth(), bounds.getHeight()) / 2.0f;
         auto toAngle = startAngle + sliderPos * (endAngle - startAngle);
-        auto lineW = 2.0f;
-        auto arcRadius = radius - lineW * 0.5f;
+        auto lineW = 1.5f + (audioLevel * 2.0f);
+        auto arcRadius = radius - 2.0f;
 
         juce::Path backgroundArc;
         backgroundArc.addCentredArc(bounds.getCentreX(), bounds.getCentreY(), arcRadius, arcRadius, 0.0f, startAngle, endAngle, true);
@@ -45,29 +48,36 @@ public:
             g.strokePath(valueArc, juce::PathStrokeType(lineW));
         }
 
-        // Draw parameter name in center using Impact font
-        g.setColour(juce::Colours::white);
-        g.setFont(juce::Font("Impact", 14.0f, juce::Font::plain));
+        g.setColour(slider.isEnabled() ? juce::Colours::white.withAlpha(0.7f + pulse) : juce::Colours::grey);
+        g.setFont(juce::Font("Impact", 13.0f, juce::Font::plain));
         g.drawText(slider.getName(), x, y + height - 15, width, 15, juce::Justification::centred);
     }
 
     void drawToggleButton(juce::Graphics& g, juce::ToggleButton& button, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override
     {
-        auto bounds = button.getLocalBounds().toFloat().reduced(2);
-        auto fill = button.getToggleState() ? juce::Colour(0xFF00E5FF) : juce::Colours::white.withAlpha(0.1f);
+        juce::ignoreUnused(shouldDrawButtonAsHighlighted, shouldDrawButtonAsDown);
+        auto bounds = button.getLocalBounds().toFloat();
+        auto tickArea = bounds.removeFromLeft(bounds.getHeight()).reduced(4);
 
+        float pulse = audioLevel * 0.5f;
+        auto fill = button.getToggleState() ? juce::Colours::white.withAlpha(0.7f + pulse) : juce::Colours::white.withAlpha(0.1f + pulse * 0.2f);
+        
         g.setColour(fill);
-        g.drawRect(bounds, 1.0f);
+        g.drawRect(tickArea, 1.0f + pulse);
+        if (button.getToggleState()) g.fillRect(tickArea.reduced(2.0f - pulse));
 
-        if (button.getToggleState()) {
-            g.fillRect(bounds.reduced(3));
+        if (button.getButtonText().isNotEmpty())
+        {
+            g.setColour(juce::Colours::white.withAlpha(0.8f + pulse * 0.2f));
+            g.setFont(juce::Font("Impact", 12.0f, juce::Font::plain));
+            g.drawText(button.getButtonText(), bounds.translated(5, 0), juce::Justification::centredLeft);
         }
     }
 
     void drawComboBox(juce::Graphics& g, int width, int height, bool isButtonDown,
                       int buttonX, int buttonY, int buttonWidth, int buttonHeight, juce::ComboBox& box) override
     {
-        auto cornerSize = 0.0f;
+        juce::ignoreUnused(isButtonDown, buttonX, buttonY, buttonWidth, buttonHeight);
         auto bounds = juce::Rectangle<int>(0, 0, width, height).toFloat();
 
         g.setColour(box.findColour(juce::ComboBox::backgroundColourId));
@@ -77,9 +87,12 @@ public:
         g.drawRect(bounds, 1.0f);
 
         juce::Path path;
-        path.addTriangle((float)width - 15.0f, (float)height * 0.5f - 2.0f,
-                         (float)width - 5.0f, (float)height * 0.5f - 2.0f,
-                         (float)width - 10.0f, (float)height * 0.5f + 3.0f);
+        float arrowSize = 3.0f;
+        float centerX = (float)width - 10.0f;
+        float centerY = (float)height * 0.5f;
+        path.addTriangle(centerX - arrowSize, centerY - arrowSize * 0.5f,
+                         centerX + arrowSize, centerY - arrowSize * 0.5f,
+                         centerX, centerY + arrowSize * 0.5f);
 
         g.setColour(box.findColour(juce::ComboBox::arrowColourId));
         g.fillPath(path);
@@ -87,18 +100,22 @@ public:
 
     juce::Font getComboBoxFont(juce::ComboBox& box) override
     {
-        return juce::Font("Impact", 16.0f, juce::Font::plain);
+        juce::ignoreUnused(box);
+        return juce::Font("Impact", 13.0f, juce::Font::plain);
     }
 
     juce::Font getPopupMenuFont() override
     {
-        return juce::Font("Impact", 16.0f, juce::Font::plain);
+        return juce::Font("Impact", 13.0f, juce::Font::plain);
     }
 
     void drawPopupMenuBackground(juce::Graphics& g, int width, int height) override
     {
-        g.fillAll(juce::Colours::black);
-        g.setColour(juce::Colour(0xFF00E5FF));
+        g.fillAll(juce::Colour(0xFF0A0A0A));
+        g.setColour(juce::Colours::white.withAlpha(0.2f));
         g.drawRect(0, 0, width, height, 1);
     }
+
+private:
+    float audioLevel = 0.0f;
 };

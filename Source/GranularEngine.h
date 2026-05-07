@@ -30,7 +30,8 @@ public:
     void prepare(double sampleRate, int maxBlockSize);
     void process(juce::AudioBuffer<float>& buffer, 
                  float sizeMs, float density, float pitch, 
-                 float texture, bool textureBypass);
+                 float texture, bool textureBypass,
+                 bool syncEnabled, int rateIndex, double bpm);
     
     float getCurrentLevel() const { return lastLevel.load(); }
 

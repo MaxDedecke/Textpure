@@ -31,6 +31,8 @@ private:
 
     juce::Slider sizeSlider, densitySlider, pitchSlider, textureSlider, mixSlider, reverbSlider;
     juce::ToggleButton sizeBypassButton, densityBypassButton, pitchBypassButton, textureBypassButton, reverbBypassButton;
+    juce::ToggleButton syncButton;
+    juce::ComboBox rateSelector;
     juce::ComboBox presetSelector;
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
@@ -39,6 +41,8 @@ private:
     
     std::unique_ptr<SliderAttachment> sizeAttachment, densityAttachment, pitchAttachment, textureAttachment, mixAttachment, reverbAttachment;
     std::unique_ptr<ButtonAttachment> sizeBypassAttachment, densityBypassAttachment, pitchBypassAttachment, textureBypassAttachment, reverbBypassAttachment;
+    std::unique_ptr<ButtonAttachment> syncAttachment;
+    std::unique_ptr<ChoiceAttachment> rateAttachment;
     std::unique_ptr<ChoiceAttachment> presetAttachment;
 
     TextpureLookAndFeel customLookAndFeel;

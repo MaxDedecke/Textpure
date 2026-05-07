@@ -79,7 +79,7 @@ void ParticleSwarm::paint(juce::Graphics& g)
             
             if (dist < threshold) {
                 float alpha = juce::jmap(dist, 0.0f, threshold, 0.6f, 0.0f);
-                g.setColour(juce::Colour(0xFF00E5FF).withAlpha(alpha)); // Turquoise Blue
+                g.setColour(juce::Colours::white.withAlpha(alpha)); 
                 g.drawLine(p1.position.x, p1.position.y, p2.position.x, p2.position.y, 0.5f);
             }
         }

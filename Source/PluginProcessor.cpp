@@ -1,4 +1,4 @@
-﻿#include "PluginProcessor.h"
+#include "PluginProcessor.h"
 #include "PluginEditor.h"
 
 //==============================================================================
@@ -10,9 +10,22 @@ NewProjectAudioProcessor::NewProjectAudioProcessor()
        apvts(*this, nullptr, "PARAMETERS", createParameters()),
        granularEngine(40)
 {
+    apvts.addParameterListener("PRESET", this);
 }
 
-NewProjectAudioProcessor::~NewProjectAudioProcessor() {}
+NewProjectAudioProcessor::~NewProjectAudioProcessor() 
+{
+    apvts.removeParameterListener("PRESET", this);
+}
+
+void NewProjectAudioProcessor::parameterChanged (const juce::String& parameterID, float newValue)
+{
+    if (parameterID == "PRESET")
+    {
+        if (!isUpdatingPresets.load())
+            setCurrentProgram ((int)newValue);
+    }
+}
 
 juce::AudioProcessorValueTreeState::ParameterLayout NewProjectAudioProcessor::createParameters()
 {
@@ -30,6 +43,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout NewProjectAudioProcessor::cr
     params.push_back(std::make_unique<juce::AudioParameterBool>("PITCH_BYPASS", "Pitch Bypass", false));
     params.push_back(std::make_unique<juce::AudioParameterBool>("TEXTURE_BYPASS", "Texture Bypass", false));
     params.push_back(std::make_unique<juce::AudioParameterBool>("REVERB_BYPASS", "Reverb Bypass", false));
+
+    params.push_back(std::make_unique<juce::AudioParameterBool>("SYNC", "Tempo Sync", false));
+    juce::StringArray rateList = { 
+        "1/4", "1/4T", "1/4D", 
+        "1/8", "1/8T", "1/8D", 
+        "1/16", "1/16T", "1/16D", 
+        "1/32", "1/64", "1/128" 
+    };
+    params.push_back(std::make_unique<juce::AudioParameterChoice>("RATE", "Sync Rate", rateList, 6)); // Default 1/16
 
     juce::StringArray presetList = { "Default", "Dark Clouds", "Digital Grit", "Ghost Melodies", "Subtle Texture", "Trap Shimmer" };
     params.push_back(std::make_unique<juce::AudioParameterChoice>("PRESET", "Preset", presetList, 0));
@@ -74,12 +96,23 @@ void NewProjectAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     const float effectiveSize = (apvts.getRawParameterValue("SIZE_BYPASS")->load() > 0.5f) ? 100.0f : apvts.getRawParameterValue("SIZE")->load();
     const float effectiveDensity = (apvts.getRawParameterValue("DENSITY_BYPASS")->load() > 0.5f) ? 20.0f : apvts.getRawParameterValue("DENSITY")->load();
 
+    const bool syncEnabled = apvts.getRawParameterValue("SYNC")->load() > 0.5f;
+    const int rateIndex = (int)apvts.getRawParameterValue("RATE")->load();
+
+    // Get BPM from Host
+    double bpm = 120.0;
+    if (auto* ph = getPlayHead()) {
+        if (auto pos = ph->getPosition()) {
+            if (auto b = pos->getBpm()) bpm = *b;
+        }
+    }
+
     // --- 2. Keep Dry Signal ---
     juce::AudioBuffer<float> dryBuffer;
     dryBuffer.makeCopyOf(buffer);
 
     // --- 3. Process Granular ---
-    granularEngine.process(buffer, effectiveSize, effectiveDensity, effectivePitch, textureValue, textureBypass);
+    granularEngine.process(buffer, effectiveSize, effectiveDensity, effectivePitch, textureValue, textureBypass, syncEnabled, rateIndex, bpm);
 
     // --- 4. Mix Dry/Wet ---
     for (int ch = 0; ch < numChannels; ++ch)
@@ -115,30 +148,56 @@ void NewProjectAudioProcessor::changeProgramName (int index, const juce::String&
 
 void NewProjectAudioProcessor::setCurrentProgram (int index)
 {
+    isUpdatingPresets.store(true);
+
     auto setParam = [this](juce::String id, float val) {
         auto* p = apvts.getParameter(id);
-        p->setValueNotifyingHost(p->getNormalisableRange().convertTo0to1(val));
+        if (p != nullptr)
+            p->setValueNotifyingHost(p->getNormalisableRange().convertTo0to1(val));
     };
     auto setBool = [this](juce::String id, bool val) {
-        apvts.getParameter(id)->setValueNotifyingHost(val ? 1.0f : 0.0f);
+        auto* p = apvts.getParameter(id);
+        if (p != nullptr)
+            p->setValueNotifyingHost(val ? 1.0f : 0.0f);
     };
 
-    if (index == 1) { // Dark Clouds
+    // Update the PRESET parameter itself so the UI combo box reflects this change
+    // (Crucial for when the host calls setCurrentProgram)
+    auto* presetParam = apvts.getParameter("PRESET");
+    if (presetParam != nullptr)
+    {
+        float normalizedIndex = presetParam->getNormalisableRange().convertTo0to1((float)index);
+        if (presetParam->getValue() != normalizedIndex)
+            presetParam->setValueNotifyingHost(normalizedIndex);
+    }
+
+    if (index == 0) { // Default
+        setParam("SIZE", 100.0f); setParam("DENSITY", 20.0f); setParam("PITCH", 1.0f); setParam("TEXTURE", 0.0f); setParam("MIX", 0.5f); setParam("REVERB", 0.3f);
+        setBool("SIZE_BYPASS", false); setBool("DENSITY_BYPASS", false); setBool("PITCH_BYPASS", false); setBool("TEXTURE_BYPASS", false); setBool("REVERB_BYPASS", false);
+        setBool("SYNC", false);
+    } else if (index == 1) { // Dark Clouds
         setParam("SIZE", 450.0f); setParam("DENSITY", 40.0f); setParam("PITCH", 0.5f); setParam("TEXTURE", 0.3f); setParam("MIX", 0.7f); setParam("REVERB", 0.6f);
         setBool("SIZE_BYPASS", false); setBool("DENSITY_BYPASS", false); setBool("PITCH_BYPASS", false); setBool("TEXTURE_BYPASS", false); setBool("REVERB_BYPASS", false);
+        setBool("SYNC", false);
     } else if (index == 2) { // Digital Grit
         setParam("SIZE", 20.0f); setParam("DENSITY", 50.0f); setParam("PITCH", 1.2f); setParam("TEXTURE", 0.9f); setParam("MIX", 0.4f); setParam("REVERB", 0.1f);
         setBool("SIZE_BYPASS", false); setBool("DENSITY_BYPASS", false); setBool("PITCH_BYPASS", false); setBool("TEXTURE_BYPASS", false); setBool("REVERB_BYPASS", false);
+        setBool("SYNC", true); setParam("RATE", 7.0f); // 1/16T
     } else if (index == 3) { // Ghost Melodies
         setParam("SIZE", 250.0f); setParam("DENSITY", 15.0f); setParam("PITCH", 2.0f); setParam("TEXTURE", 0.1f); setParam("MIX", 0.6f); setParam("REVERB", 0.8f);
         setBool("SIZE_BYPASS", false); setBool("DENSITY_BYPASS", false); setBool("PITCH_BYPASS", false); setBool("TEXTURE_BYPASS", false); setBool("REVERB_BYPASS", false);
+        setBool("SYNC", false);
     } else if (index == 4) { // Subtle Texture
         setParam("SIZE", 80.0f); setParam("DENSITY", 10.0f); setParam("PITCH", 1.0f); setParam("TEXTURE", 0.5f); setParam("MIX", 0.2f); setParam("REVERB", 0.2f);
         setBool("SIZE_BYPASS", false); setBool("DENSITY_BYPASS", false); setBool("PITCH_BYPASS", true); setBool("TEXTURE_BYPASS", false); setBool("REVERB_BYPASS", false);
+        setBool("SYNC", false);
     } else if (index == 5) { // Trap Shimmer
         setParam("SIZE", 150.0f); setParam("DENSITY", 30.0f); setParam("PITCH", 1.5f); setParam("TEXTURE", 0.2f); setParam("MIX", 0.5f); setParam("REVERB", 0.4f);
         setBool("SIZE_BYPASS", false); setBool("DENSITY_BYPASS", false); setBool("PITCH_BYPASS", false); setBool("TEXTURE_BYPASS", false); setBool("REVERB_BYPASS", false);
+        setBool("SYNC", true); setParam("RATE", 5.0f); // 1/8D
     }
+
+    isUpdatingPresets.store(false);
 }
 
 juce::AudioProcessorEditor* NewProjectAudioProcessor::createEditor() { return new NewProjectAudioProcessorEditor (*this); }
