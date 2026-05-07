@@ -1,11 +1,3 @@
-/*
-  ==============================================================================
-
-    This file contains the basic framework code for a JUCE plugin editor.
-
-  ==============================================================================
-*/
-
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
@@ -15,32 +7,31 @@ NewProjectAudioProcessorEditor::NewProjectAudioProcessorEditor (NewProjectAudioP
 {
     setLookAndFeel(&customLookAndFeel);
 
-    auto setupSlider = [this](juce::Slider& s, juce::Label& l, juce::String name) {
+    addAndMakeVisible(swarm);
+
+    auto setupSlider = [this](juce::Slider& s, juce::String name) {
         s.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-        s.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 70, 20);
+        s.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+        s.setName(name);
         addAndMakeVisible(s);
-        l.setText(name, juce::dontSendNotification);
-        l.setJustificationType(juce::Justification::centred);
-        l.attachToComponent(&s, false);
-        addAndMakeVisible(l);
     };
 
-    setupSlider(sizeSlider, sizeLabel, "Grain Size");
-    setupSlider(densitySlider, densityLabel, "Density");
-    setupSlider(pitchSlider, pitchLabel, "Pitch");
-    setupSlider(textureSlider, textureLabel, "Texture");
-    setupSlider(mixSlider, mixLabel, "Mix");
-    setupSlider(reverbSlider, reverbLabel, "Reverb");
+    setupSlider(sizeSlider, "SIZE");
+    setupSlider(densitySlider, "DENSITY");
+    setupSlider(pitchSlider, "PITCH");
+    setupSlider(textureSlider, "TEXTURE");
+    setupSlider(mixSlider, "MIX");
+    setupSlider(reverbSlider, "REVERB");
 
-    sizeBypassButton.setButtonText("Bypass"); addAndMakeVisible(sizeBypassButton);
-    densityBypassButton.setButtonText("Bypass"); addAndMakeVisible(densityBypassButton);
-    pitchBypassButton.setButtonText("Bypass"); addAndMakeVisible(pitchBypassButton);
-    textureBypassButton.setButtonText("Bypass"); addAndMakeVisible(textureBypassButton);
-    reverbBypassButton.setButtonText("Bypass"); addAndMakeVisible(reverbBypassButton);
+    sizeBypassButton.setButtonText(""); addAndMakeVisible(sizeBypassButton);
+    densityBypassButton.setButtonText(""); addAndMakeVisible(densityBypassButton);
+    pitchBypassButton.setButtonText(""); addAndMakeVisible(pitchBypassButton);
+    textureBypassButton.setButtonText(""); addAndMakeVisible(textureBypassButton);
+    reverbBypassButton.setButtonText(""); addAndMakeVisible(reverbBypassButton);
 
     presetSelector.addItemList(audioProcessor.apvts.getParameter("PRESET")->getAllValueStrings(), 1);
     addAndMakeVisible(presetSelector);
-    presetSelector.onChange = [this]() { audioProcessor.setCurrentProgram(presetSelector.getSelectedItemIndex()); };
+    presetSelector.setJustificationType(juce::Justification::centred);
 
     sizeAttachment = std::make_unique<SliderAttachment>(audioProcessor.apvts, "SIZE", sizeSlider);
     densityAttachment = std::make_unique<SliderAttachment>(audioProcessor.apvts, "DENSITY", densitySlider);
@@ -57,8 +48,8 @@ NewProjectAudioProcessorEditor::NewProjectAudioProcessorEditor (NewProjectAudioP
     
     presetAttachment = std::make_unique<ChoiceAttachment>(audioProcessor.apvts, "PRESET", presetSelector);
 
-    startTimerHz(30); 
-    setSize (650, 550);
+    startTimerHz(60); 
+    setSize (700, 500);
 }
 
 NewProjectAudioProcessorEditor::~NewProjectAudioProcessorEditor() { setLookAndFeel(nullptr); }
@@ -66,56 +57,70 @@ NewProjectAudioProcessorEditor::~NewProjectAudioProcessorEditor() { setLookAndFe
 void NewProjectAudioProcessorEditor::timerCallback()
 {
     float level = audioProcessor.getCurrentLevel();
-    float targetGlow = juce::jmin(1.0f, level * 15.0f); // Noch hÃ¶here SensitivitÃ¤t
-
-    currentGlow = currentGlow + (targetGlow - currentGlow) * 0.15f;
-    customLookAndFeel.glowAmount = currentGlow;
-    repaint();
+    
+    swarm.setParameters(
+        audioProcessor.apvts.getRawParameterValue("DENSITY")->load(),
+        audioProcessor.apvts.getRawParameterValue("TEXTURE")->load(),
+        audioProcessor.apvts.getRawParameterValue("SIZE")->load(),
+        audioProcessor.apvts.getRawParameterValue("PITCH")->load(),
+        level
+    );
 }
 
 void NewProjectAudioProcessorEditor::paint (juce::Graphics& g)
 {
-    juce::ColourGradient gradient(juce::Colour(0xff050505), 0, 0, juce::Colour(0xff151515), 0, (float)getHeight(), false);
-    g.setGradientFill(gradient);
-    g.fillAll();
+    g.fillAll(juce::Colour(0xFF0A0A0A)); // Deep Black
 
-
-    auto titleArea = getLocalBounds().removeFromTop(80);
-    g.setColour (juce::Colour(0xff00fff2).interpolatedWith(juce::Colours::white, currentGlow));
-    g.setFont (juce::Font("Impact", 40.0f, juce::Font::plain));
-    g.drawFittedText ("TEXTPURE", titleArea.removeFromTop(50), juce::Justification::centred, 1);
+    auto bounds = getLocalBounds().toFloat();
     
-    g.setColour (juce::Colours::grey.interpolatedWith(juce::Colour(0xff00fff2), currentGlow));
-    g.setFont (juce::Font("Arial", 14.0f, juce::Font::italic));
-    g.drawFittedText ("prodbyJMD", titleArea, juce::Justification::centred, 1);
+    // Header
+    auto headerArea = bounds.removeFromTop(60).reduced(20, 0);
+    g.setColour(juce::Colours::white);
+    g.setFont(juce::Font("Impact", 32.0f, juce::Font::plain));
+    g.drawText("TEXTPURE", headerArea, juce::Justification::centredLeft);
     
-    g.setColour(juce::Colour(0xff00fff2).withAlpha(0.1f + currentGlow * 0.6f));
-    g.drawHorizontalLine(78, 40.0f, (float)getWidth() - 40.0f);
+    g.setFont(12.0f);
+    g.drawText("PROD BY JMD", headerArea, juce::Justification::centredRight);
+    
+    g.setColour(juce::Colours::white.withAlpha(0.1f));
+    g.drawHorizontalLine(60, 0, bounds.getWidth());
 }
 
 void NewProjectAudioProcessorEditor::resized()
 {
     auto bounds = getLocalBounds().reduced(20);
-    bounds.removeFromTop(85);
-    presetSelector.setBounds(bounds.removeFromTop(30).withSizeKeepingCentre(200, 30));
-    bounds.removeFromTop(20);
-
-    auto topRow = bounds.removeFromTop(bounds.getHeight() / 2);
-    int sliderWidth = topRow.getWidth() / 3;
-
-    auto setupArea = [](juce::Rectangle<int> area, juce::Slider& s, juce::ToggleButton& b) {
-        s.setBounds(area.removeFromTop(area.getHeight() - 25));
-        b.setBounds(area.withSize(area.getWidth(), 20).translated(0, -10));
+    auto headerArea = bounds.removeFromTop(60);
+    
+    auto mainArea = bounds;
+    auto leftControls = mainArea.removeFromLeft(120);
+    auto rightControls = mainArea.removeFromRight(120);
+    auto bottomArea = mainArea.removeFromBottom(100);
+    
+    // Central Swarm
+    swarm.setBounds(mainArea.reduced(10));
+    
+    // Side Controls
+    int h = leftControls.getHeight() / 3;
+    sizeSlider.setBounds(leftControls.removeFromTop(h).reduced(10));
+    densitySlider.setBounds(leftControls.removeFromTop(h).reduced(10));
+    pitchSlider.setBounds(leftControls.removeFromTop(h).reduced(10));
+    
+    h = rightControls.getHeight() / 3;
+    textureSlider.setBounds(rightControls.removeFromTop(h).reduced(10));
+    reverbSlider.setBounds(rightControls.removeFromTop(h).reduced(10));
+    mixSlider.setBounds(rightControls.removeFromTop(h).reduced(10));
+    
+    // Bottom Area
+    presetSelector.setBounds(bottomArea.withSizeKeepingCentre(200, 30));
+    
+    // Tiny bypass buttons near sliders
+    auto placeBypass = [](juce::Slider& s, juce::ToggleButton& b) {
+        b.setBounds(s.getBounds().removeFromTop(15).removeFromRight(15));
     };
-
-    setupArea(topRow.removeFromLeft(sliderWidth).reduced(15), sizeSlider, sizeBypassButton);
-    setupArea(topRow.removeFromLeft(sliderWidth).reduced(15), densitySlider, densityBypassButton);
-    setupArea(topRow.reduced(15), pitchSlider, pitchBypassButton);
-
-    auto bottomRow = bounds;
-    int bottomSliderWidth = bottomRow.getWidth() / 3;
-
-    setupArea(bottomRow.removeFromLeft(bottomSliderWidth).reduced(15), textureSlider, textureBypassButton);
-    mixSlider.setBounds(bottomRow.removeFromLeft(bottomSliderWidth).reduced(15));
-    setupArea(bottomRow.reduced(15), reverbSlider, reverbBypassButton);
+    
+    placeBypass(sizeSlider, sizeBypassButton);
+    placeBypass(densitySlider, densityBypassButton);
+    placeBypass(pitchSlider, pitchBypassButton);
+    placeBypass(textureSlider, textureBypassButton);
+    placeBypass(reverbSlider, reverbBypassButton);
 }
