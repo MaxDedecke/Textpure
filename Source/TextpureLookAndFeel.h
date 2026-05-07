@@ -26,8 +26,12 @@ public:
                           const float startAngle, const float endAngle, juce::Slider& slider) override
     {
         float pulse = 0.1f + (audioLevel * 0.4f);
-        auto outline = juce::Colours::white.withAlpha(slider.isEnabled() ? (0.1f + pulse) : 0.05f);
-        auto fill = slider.isEnabled() ? juce::Colours::white.withAlpha(0.6f + pulse) : juce::Colours::grey.withAlpha(0.3f);
+        
+        // Turquoise interpolation
+        auto baseColor = juce::Colours::white.interpolatedWith(juce::Colours::turquoise, juce::jlimit(0.0f, 1.0f, audioLevel * 1.5f));
+        
+        auto outline = baseColor.withAlpha(slider.isEnabled() ? (0.1f + pulse) : 0.05f);
+        auto fill = slider.isEnabled() ? baseColor.withAlpha(0.6f + pulse) : juce::Colours::grey.withAlpha(0.3f);
 
         auto bounds = juce::Rectangle<int>(x, y, width, height).toFloat().reduced(10);
         auto radius = juce::jmin(bounds.getWidth(), bounds.getHeight()) / 2.0f;
@@ -48,7 +52,7 @@ public:
             g.strokePath(valueArc, juce::PathStrokeType(lineW));
         }
 
-        g.setColour(slider.isEnabled() ? juce::Colours::white.withAlpha(0.7f + pulse) : juce::Colours::grey);
+        g.setColour(slider.isEnabled() ? baseColor.withAlpha(0.7f + pulse) : juce::Colours::grey);
         g.setFont(juce::Font("Impact", 13.0f, juce::Font::plain));
         g.drawText(slider.getName(), x, y + height - 15, width, 15, juce::Justification::centred);
     }
@@ -60,7 +64,9 @@ public:
         auto tickArea = bounds.removeFromLeft(bounds.getHeight()).reduced(4);
 
         float pulse = audioLevel * 0.5f;
-        auto fill = button.getToggleState() ? juce::Colours::white.withAlpha(0.7f + pulse) : juce::Colours::white.withAlpha(0.1f + pulse * 0.2f);
+        auto baseColor = juce::Colours::white.interpolatedWith(juce::Colours::turquoise, juce::jlimit(0.0f, 1.0f, audioLevel * 1.5f));
+        
+        auto fill = button.getToggleState() ? baseColor.withAlpha(0.7f + pulse) : baseColor.withAlpha(0.1f + pulse * 0.2f);
         
         g.setColour(fill);
         g.drawRect(tickArea, 1.0f + pulse);
@@ -68,7 +74,7 @@ public:
 
         if (button.getButtonText().isNotEmpty())
         {
-            g.setColour(juce::Colours::white.withAlpha(0.8f + pulse * 0.2f));
+            g.setColour(baseColor.withAlpha(0.8f + pulse * 0.2f));
             g.setFont(juce::Font("Impact", 12.0f, juce::Font::plain));
             g.drawText(button.getButtonText(), bounds.translated(5, 0), juce::Justification::centredLeft);
         }

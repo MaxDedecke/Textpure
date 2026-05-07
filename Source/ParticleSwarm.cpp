@@ -65,27 +65,28 @@ void ParticleSwarm::paint(juce::Graphics& g)
     auto bounds = getLocalBounds().toFloat();
     float pulse = 1.0f + (audioLevel * 0.5f);
     
-    g.setColour(juce::Colours::white.withAlpha(0.8f));
+    // Turquoise interpolation for the whole swarm
+    auto baseColor = juce::Colours::white.interpolatedWith(juce::Colours::turquoise, juce::jlimit(0.0f, 1.0f, audioLevel * 1.5f));
     
     float threshold = connectionThreshold * (0.5f + sizeAmount);
 
     for (int i = 0; i < activeParticles; ++i) {
         auto& p1 = particles[i];
         
-        // Draw connections
+        // Draw connections (edges)
         for (int j = i + 1; j < activeParticles; ++j) {
             auto& p2 = particles[j];
             float dist = p1.position.getDistanceFrom(p2.position);
             
             if (dist < threshold) {
                 float alpha = juce::jmap(dist, 0.0f, threshold, 0.6f, 0.0f);
-                g.setColour(juce::Colours::white.withAlpha(alpha)); 
+                g.setColour(baseColor.withAlpha(alpha)); 
                 g.drawLine(p1.position.x, p1.position.y, p2.position.x, p2.position.y, 0.5f);
             }
         }
         
         // Draw particle
-        g.setColour(juce::Colours::white);
+        g.setColour(baseColor);
         float s = p1.size * pulse;
         g.fillEllipse(p1.position.x - s/2, p1.position.y - s/2, s, s);
     }
