@@ -75,7 +75,7 @@ void ParticleSwarm::paint(juce::Graphics& g)
         // Draw connections
         for (int j = i + 1; j < activeParticles; ++j) {
             auto& p2 = particles[j];
-            float dist = p1.position.getDistanceTo(p2.position);
+            float dist = p1.position.getDistanceFrom(p2.position);
             
             if (dist < threshold) {
                 float alpha = juce::jmap(dist, 0.0f, threshold, 0.6f, 0.0f);
