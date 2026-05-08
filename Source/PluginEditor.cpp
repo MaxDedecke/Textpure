@@ -29,10 +29,18 @@ NewProjectAudioProcessorEditor::NewProjectAudioProcessorEditor (NewProjectAudioP
     textureBypassButton.setButtonText(""); addAndMakeVisible(textureBypassButton);
     reverbBypassButton.setButtonText(""); addAndMakeVisible(reverbBypassButton);
 
-    syncButton.setButtonText(""); addAndMakeVisible(syncButton);
-    rateSelector.addItemList(audioProcessor.apvts.getParameter("RATE")->getAllValueStrings(), 1);
-    addAndMakeVisible(rateSelector);
-    rateSelector.setJustificationType(juce::Justification::centred);
+    sizeSyncButton.setButtonText(""); addAndMakeVisible(sizeSyncButton);
+    sizeRateSelector.addItemList(audioProcessor.apvts.getParameter("SIZE_RATE")->getAllValueStrings(), 1);
+    addAndMakeVisible(sizeRateSelector);
+    sizeRateSelector.setJustificationType(juce::Justification::centred);
+
+    granularBandSelector = std::make_unique<BandSpinner>(audioProcessor.apvts, "GRANULAR_BAND");
+    textureBandSelector = std::make_unique<BandSpinner>(audioProcessor.apvts, "TEXTURE_BAND");
+    reverbBandSelector = std::make_unique<BandSpinner>(audioProcessor.apvts, "REVERB_BAND");
+    
+    addAndMakeVisible(*granularBandSelector);
+    addAndMakeVisible(*textureBandSelector);
+    addAndMakeVisible(*reverbBandSelector);
 
     presetSelector.addItemList(audioProcessor.apvts.getParameter("PRESET")->getAllValueStrings(), 1);
     addAndMakeVisible(presetSelector);
@@ -53,6 +61,10 @@ NewProjectAudioProcessorEditor::NewProjectAudioProcessorEditor (NewProjectAudioP
     
     syncAttachment = std::make_unique<ButtonAttachment>(audioProcessor.apvts, "SYNC", syncButton);
     rateAttachment = std::make_unique<ChoiceAttachment>(audioProcessor.apvts, "RATE", rateSelector);
+    
+    sizeSyncAttachment = std::make_unique<ButtonAttachment>(audioProcessor.apvts, "SIZE_SYNC", sizeSyncButton);
+    sizeRateAttachment = std::make_unique<ChoiceAttachment>(audioProcessor.apvts, "SIZE_RATE", sizeRateSelector);
+    
     presetAttachment = std::make_unique<ChoiceAttachment>(audioProcessor.apvts, "PRESET", presetSelector);
 
     startTimerHz(60); 
@@ -75,17 +87,21 @@ void NewProjectAudioProcessorEditor::timerCallback()
         level
     );
 
-    // Visual Bypass Feedback
-    sizeSlider.setEnabled(audioProcessor.apvts.getRawParameterValue("SIZE_BYPASS")->load() < 0.5f);
-    densitySlider.setEnabled(audioProcessor.apvts.getRawParameterValue("DENSITY_BYPASS")->load() < 0.5f);
-    pitchSlider.setEnabled(audioProcessor.apvts.getRawParameterValue("PITCH_BYPASS")->load() < 0.5f);
-    textureSlider.setEnabled(audioProcessor.apvts.getRawParameterValue("TEXTURE_BYPASS")->load() < 0.5f);
-    reverbSlider.setEnabled(audioProcessor.apvts.getRawParameterValue("REVERB_BYPASS")->load() < 0.5f);
+    // Visual Bypass Feedback (Active logic: parameter=true means enabled)
+    sizeSlider.setEnabled(audioProcessor.apvts.getRawParameterValue("SIZE_BYPASS")->load() > 0.5f);
+    densitySlider.setEnabled(audioProcessor.apvts.getRawParameterValue("DENSITY_BYPASS")->load() > 0.5f);
+    pitchSlider.setEnabled(audioProcessor.apvts.getRawParameterValue("PITCH_BYPASS")->load() > 0.5f);
+    textureSlider.setEnabled(audioProcessor.apvts.getRawParameterValue("TEXTURE_BYPASS")->load() > 0.5f);
+    reverbSlider.setEnabled(audioProcessor.apvts.getRawParameterValue("REVERB_BYPASS")->load() > 0.5f);
 
     // Sync/Rate visibility logic
     bool isSync = audioProcessor.apvts.getRawParameterValue("SYNC")->load() > 0.5f;
     rateSelector.setVisible(isSync);
     densitySlider.setVisible(!isSync);
+
+    bool isSizeSync = audioProcessor.apvts.getRawParameterValue("SIZE_SYNC")->load() > 0.5f;
+    sizeRateSelector.setVisible(isSizeSync);
+    sizeSlider.setVisible(!isSizeSync);
 
     repaint();
 }
@@ -97,7 +113,7 @@ void NewProjectAudioProcessorEditor::paint (juce::Graphics& g)
     auto bounds = getLocalBounds().toFloat();
     
     // Header
-    auto headerArea = bounds.removeFromTop(60).reduced(20, 0);
+    auto headerArea = bounds.removeFromTop(80).reduced(20, 0);
     g.setColour(juce::Colours::white);
     g.setFont(juce::Font("Impact", 32.0f, juce::Font::plain));
     g.drawText("TEXTPURE", headerArea, juce::Justification::centredLeft);
@@ -106,52 +122,64 @@ void NewProjectAudioProcessorEditor::paint (juce::Graphics& g)
     g.drawText("PROD BY JMD", headerArea, juce::Justification::centredRight);
     
     g.setColour(juce::Colours::white.withAlpha(0.1f));
-    g.drawHorizontalLine(60, 0, bounds.getWidth());
+    g.drawHorizontalLine(80, 0, bounds.getWidth());
 }
 
 void NewProjectAudioProcessorEditor::resized()
 {
-    auto bounds = getLocalBounds().reduced(20);
-    auto headerArea = bounds.removeFromTop(60);
+    auto bounds = getLocalBounds();
+    auto headerArea = bounds.removeFromTop(80).reduced(20, 0);
     
-    auto mainArea = bounds;
-    auto leftControls = mainArea.removeFromLeft(120);
-    auto rightControls = mainArea.removeFromRight(120);
-    auto bottomArea = mainArea.removeFromBottom(100);
+    // Preset Selector in Header
+    presetSelector.setBounds(headerArea.withSizeKeepingCentre(180, 25));
+
+    auto mainArea = bounds.reduced(20, 10);
+    auto leftControls = mainArea.removeFromLeft(140);
+    auto rightControls = mainArea.removeFromRight(140);
     
     // Central Swarm
     swarm.setBounds(mainArea.reduced(10));
     
     // Side Controls
     int h = leftControls.getHeight() / 3;
-    sizeSlider.setBounds(leftControls.removeFromTop(h).reduced(10));
-    densitySlider.setBounds(leftControls.removeFromTop(h).reduced(10));
-    pitchSlider.setBounds(leftControls.removeFromTop(h).reduced(10));
+    
+    // --- Size Area ---
+    auto sizeArea = leftControls.removeFromTop(h).reduced(10);
+    sizeSlider.setBounds(sizeArea);
+    sizeRateSelector.setBounds(sizeArea.withSizeKeepingCentre(80, 20));
+    auto sizeTopRow = sizeArea.removeFromTop(15);
+    sizeSyncButton.setBounds(sizeTopRow.removeFromLeft(15));
+    sizeBypassButton.setBounds(sizeTopRow.removeFromRight(15));
+    
+    // --- Density Area ---
+    auto densityArea = leftControls.removeFromTop(h).reduced(10);
+    densitySlider.setBounds(densityArea);
+    rateSelector.setBounds(densityArea.withSizeKeepingCentre(80, 20));
+    auto densityTopRow = densityArea.removeFromTop(15);
+    syncButton.setBounds(densityTopRow.removeFromLeft(15));
+    densityBypassButton.setBounds(densityTopRow.removeFromRight(15));
+    
+    // --- Pitch Area ---
+    auto pitchArea = leftControls.removeFromTop(h).reduced(10);
+    pitchSlider.setBounds(pitchArea);
+    granularBandSelector->setBounds(pitchArea.withSizeKeepingCentre(60, 20));
+    pitchBypassButton.setBounds(pitchArea.removeFromTop(15).removeFromRight(15));
     
     h = rightControls.getHeight() / 3;
-    textureSlider.setBounds(rightControls.removeFromTop(h).reduced(10));
-    reverbSlider.setBounds(rightControls.removeFromTop(h).reduced(10));
-    mixSlider.setBounds(rightControls.removeFromTop(h).reduced(10));
     
-    // Bottom Area
-    presetSelector.setBounds(bottomArea.withSizeKeepingCentre(300, 40));
-    
-    // Position Sync controls over/near density slider
-    auto densityBounds = densitySlider.getBounds();
-    syncButton.setBounds(densityBounds.removeFromTop(15).removeFromRight(15));
-    rateSelector.setBounds(densityBounds.withSizeKeepingCentre(80, 20));
+    // --- Texture Area ---
+    auto textureArea = rightControls.removeFromTop(h).reduced(10);
+    textureSlider.setBounds(textureArea);
+    textureBandSelector->setBounds(textureArea.withSizeKeepingCentre(60, 20));
+    textureBypassButton.setBounds(textureArea.removeFromTop(15).removeFromRight(15));
 
-    // Tiny bypass buttons near sliders
-    auto placeBypass = [](juce::Slider& s, juce::ToggleButton& b) {
-        b.setBounds(s.getBounds().removeFromTop(15).removeFromRight(15));
-    };
-    
-    placeBypass(sizeSlider, sizeBypassButton);
-    placeBypass(densitySlider, densityBypassButton);
-    placeBypass(pitchSlider, pitchBypassButton);
-    placeBypass(textureSlider, textureBypassButton);
-    placeBypass(reverbSlider, reverbBypassButton);
-    
-    // Minimalist Preset Selector
-    presetSelector.setBounds(bottomArea.withSizeKeepingCentre(180, 25));
+    // --- Reverb Area ---
+    auto reverbArea = rightControls.removeFromTop(h).reduced(10);
+    reverbSlider.setBounds(reverbArea);
+    reverbBandSelector->setBounds(reverbArea.withSizeKeepingCentre(60, 20));
+    reverbBypassButton.setBounds(reverbArea.removeFromTop(15).removeFromRight(15));
+
+    // --- Mix Area ---
+    auto mixArea = rightControls.removeFromTop(h).reduced(10);
+    mixSlider.setBounds(mixArea);
 }

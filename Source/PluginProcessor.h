@@ -54,6 +54,7 @@ private:
     
     juce::Reverb reverb;
     juce::Reverb::Parameters reverbParams;
+    FrequencySplitter reverbFilter;
 
     std::atomic<bool> isUpdatingPresets{ false };
 

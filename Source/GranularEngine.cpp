@@ -53,39 +53,57 @@ void GranularEngine::prepare(double sampleRate, int maxBlockSize)
     writePosition = 0;
     samplesSinceLastGrain = 0;
     for (auto& g : grains) g.reset();
+
+    granularFilter.prepare(sampleRate, maxBlockSize);
+    textureFilter.prepare(sampleRate, maxBlockSize);
+
+    smoothedPitch.reset(sampleRate, 0.05);
+    smoothedPitch.setCurrentAndTargetValue(1.0f);
 }
 
 void GranularEngine::process(juce::AudioBuffer<float>& buffer, 
                              float sizeMs, float density, float pitch, 
                              float texture, bool textureBypass,
-                             bool syncEnabled, int rateIndex, double bpm)
+                             bool syncEnabled, int rateIndex, 
+                             bool sizeSyncEnabled, int sizeRateIndex,
+                             int granularBand, int textureBand,
+                             double bpm)
 {
     const int numSamples = buffer.getNumSamples();
     const int numChannels = buffer.getNumChannels();
     const int circularBufferSize = circularBuffer.getNumSamples();
     
+    smoothedPitch.setTargetValue(pitch);
+
+    // --- 1. Calculate Intervals ---
     float grainIntervalSamples;
-    
+    float divisions[] = { 
+        1.0f, 2.0f/3.0f, 1.5f,              // 1/4
+        0.5f, 1.0f/3.0f, 0.75f,             // 1/8
+        0.25f, 0.5f/3.0f, 0.375f,           // 1/16
+        0.125f, 0.0625f, 0.03125f           // 1/32, 1/64, 1/128
+    };
+
     if (syncEnabled && bpm > 0)
     {
-        // 0=1/4, 1=1/4T, 2=1/4D, 3=1/8, 4=1/8T, 5=1/8D, 6=1/16, 7=1/16T, 8=1/16D, 9=1/32, 10=1/64, 11=1/128
-        float divisions[] = { 
-            1.0f, 2.0f/3.0f, 1.5f,              // 1/4
-            0.5f, 1.0f/3.0f, 0.75f,             // 1/8
-            0.25f, 0.5f/3.0f, 0.375f,           // 1/16
-            0.125f, 0.0625f, 0.03125f           // 1/32, 1/64, 1/128
-        };
         float division = divisions[juce::jlimit(0, 11, rateIndex)];
-        
         float secondsPerBeat = 60.0f / (float)bpm;
-        float syncIntervalSeconds = secondsPerBeat * division;
-        grainIntervalSamples = syncIntervalSeconds * (float)currentSampleRate;
+        grainIntervalSamples = secondsPerBeat * division * (float)currentSampleRate;
     }
     else
     {
         grainIntervalSamples = (float)currentSampleRate / density;
     }
 
+    float effectiveSizeMs = sizeMs;
+    if (sizeSyncEnabled && bpm > 0)
+    {
+        float division = divisions[juce::jlimit(0, 11, sizeRateIndex)];
+        float secondsPerBeat = 60.0f / (float)bpm;
+        effectiveSizeMs = secondsPerBeat * division * 1000.0f;
+    }
+
+    // --- 2. Record Input and Process Grains ---
     float totalLevel = 0.0f;
 
     for (int sample = 0; sample < numSamples; ++sample)
@@ -97,12 +115,14 @@ void GranularEngine::process(juce::AudioBuffer<float>& buffer,
         circularBuffer.setSample(1, writePosition, inR);
         totalLevel += std::abs(inL);
 
+        float currentPitch = smoothedPitch.getNextValue();
+
         // Spawning
         samplesSinceLastGrain++;
         if (samplesSinceLastGrain >= grainIntervalSamples)
         {
             samplesSinceLastGrain = 0;
-            spawnGrain(writePosition, sizeMs, pitch, texture, textureBypass);
+            spawnGrain(writePosition, effectiveSizeMs, currentPitch, texture, textureBypass);
         }
 
         // Processing
@@ -122,21 +142,12 @@ void GranularEngine::process(juce::AudioBuffer<float>& buffer,
 
         if (activeCount > 0)
         {
+            // Square-root normalization for energy conservation
             float norm = 1.0f / std::sqrt((float)activeCount);
             grainOutL *= norm;
             grainOutR *= norm;
         }
 
-        // Apply Texture (Saturation)
-        if (!textureBypass && texture > 0.05f)
-        {
-            float drive = 1.0f + texture * 2.0f;
-            grainOutL = std::tanh(grainOutL * drive);
-            grainOutR = std::tanh(grainOutR * drive);
-        }
-
-        // We only return the wet granular signal in this buffer
-        // The PluginProcessor will handle the dry/wet mix
         buffer.setSample(0, sample, grainOutL);
         if (numChannels > 1) buffer.setSample(1, sample, grainOutR);
 
@@ -144,7 +155,53 @@ void GranularEngine::process(juce::AudioBuffer<float>& buffer,
     }
 
     lastLevel.store(totalLevel / (float)numSamples);
+
+    // --- 3. Apply Granular Band Filtering ---
+    if (granularBand != 0)
+    {
+        granularFilter.process(buffer, granularBand);
+    }
+
+    // --- 4. Apply Texture (Saturation) with Band Restriction ---
+    if (!textureBypass && texture > 0.05f)
+    {
+        if (textureBand == 0) // Full Spectrum
+        {
+            float drive = 1.0f + texture * 2.0f;
+            for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+            {
+                auto* ptr = buffer.getWritePointer(ch);
+                for (int s = 0; s < buffer.getNumSamples(); ++s)
+                    ptr[s] = std::tanh(ptr[s] * drive);
+            }
+        }
+        else // Restricted Band
+        {
+            juce::AudioBuffer<float> bandBuffer;
+            bandBuffer.makeCopyOf(buffer);
+            textureFilter.process(bandBuffer, textureBand);
+
+            juce::AudioBuffer<float> unprocessedBand;
+            unprocessedBand.makeCopyOf(buffer);
+            textureFilter.process(unprocessedBand, textureBand);
+
+            float drive = 1.0f + texture * 2.0f;
+            for (int ch = 0; ch < bandBuffer.getNumChannels(); ++ch)
+            {
+                auto* ptr = bandBuffer.getWritePointer(ch);
+                auto* cleanPtr = buffer.getWritePointer(ch);
+                auto* unprocPtr = unprocessedBand.getReadPointer(ch);
+                
+                for (int s = 0; s < bandBuffer.getNumSamples(); ++s)
+                {
+                    float saturated = std::tanh(ptr[s] * drive);
+                    cleanPtr[s] = cleanPtr[s] - unprocPtr[s] + saturated;
+                }
+            }
+        }
+    }
 }
+
 
 void GranularEngine::spawnGrain(int writePos, float sizeMs, float pitch, float texture, bool textureBypass)
 {
@@ -157,8 +214,20 @@ void GranularEngine::spawnGrain(int writePos, float sizeMs, float pitch, float t
             g.ageSamples = 0;
             g.pitch = pitch;
 
+            // --- STRETCH MODE LOGIC ---
+            // To prevent temporal shifts when pitching, we pull audio from a stable window 
+            // behind the write head. This constant offset (e.g. 150ms) ensures that transients 
+            // always appear at the correct time relative to the input.
+            
+            float stableDelaySamples = (float)currentSampleRate * 0.150f; // 150ms fixed delay
+            
+            // We must ensure the grain doesn't read into the "future" (ahead of writePos)
+            // if it plays back faster (pitch > 1.0) or starts too early.
+            float requiredSafety = (float)g.durationSamples * pitch;
+            float actualOffset = juce::jmax(stableDelaySamples, requiredSafety + 100.0f);
+
             float jitter = textureBypass ? 0.0f : (random.nextFloat() - 0.5f) * texture * 5000.0f;
-            g.startSample = (float)writePos - (g.durationSamples * g.pitch) - 500.0f - jitter;
+            g.startSample = (float)writePos - actualOffset - jitter;
 
             int bufSize = circularBuffer.getNumSamples();
             while (g.startSample < 0) g.startSample += (float)bufSize;

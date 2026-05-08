@@ -122,6 +122,38 @@ public:
         g.drawRect(0, 0, width, height, 1);
     }
 
+    juce::PopupMenu::Options getOptionsForComboBoxPopupMenu(juce::ComboBox& box, juce::Label& label) override
+    {
+        return juce::PopupMenu::Options()
+            .withTargetComponent(&box)
+            .withItemThatMustBeVisible(box.getSelectedId())
+            .withMinimumWidth(box.getWidth())
+            .withMaximumNumColumns(1)
+            .withStandardItemHeight(label.getHeight())
+            .withPreferredPopupDirection(juce::PopupMenu::Options::PopupDirection::downwards);
+    }
+
+    void drawButtonBackground(juce::Graphics& g, juce::Button& button, const juce::Colour& backgroundColour,
+                              bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override
+    {
+        juce::ignoreUnused(backgroundColour);
+        auto bounds = button.getLocalBounds().toFloat();
+        
+        if (shouldDrawButtonAsDown || shouldDrawButtonAsHighlighted)
+        {
+            g.setColour(juce::Colours::white.withAlpha(shouldDrawButtonAsDown ? 0.2f : 0.1f));
+            g.fillRoundedRectangle(bounds, 2.0f);
+        }
+    }
+
+    void drawButtonText(juce::Graphics& g, juce::TextButton& button, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override
+    {
+        juce::ignoreUnused(shouldDrawButtonAsHighlighted, shouldDrawButtonAsDown);
+        g.setColour(juce::Colours::white.withAlpha(button.isEnabled() ? 1.0f : 0.5f));
+        g.setFont(juce::Font("Impact", button.getHeight() * 0.8f, juce::Font::plain));
+        g.drawText(button.getButtonText(), button.getLocalBounds(), juce::Justification::centred);
+    }
+
 private:
     float audioLevel = 0.0f;
 };
