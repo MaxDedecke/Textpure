@@ -126,10 +126,10 @@ public:
     {
         return juce::PopupMenu::Options()
             .withTargetComponent(&box)
-            .withItemThatMustBeVisible(box.getSelectedId())
             .withMinimumWidth(box.getWidth())
             .withMaximumNumColumns(1)
             .withStandardItemHeight(label.getHeight())
+            .withMaximumHeight(400) // Enable scrolling after 400px
             .withPreferredPopupDirection(juce::PopupMenu::Options::PopupDirection::downwards);
     }
 

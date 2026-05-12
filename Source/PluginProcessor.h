@@ -2,6 +2,7 @@
 
 #include <JuceHeader.h>
 #include "GranularEngine.h"
+#include "PresetManager.h"
 
 //==============================================================================
 /**
@@ -44,11 +45,14 @@ public:
 
     // Public for Editor access
     juce::AudioProcessorValueTreeState apvts;
+    PresetManager presetManager;
+    
     float getCurrentLevel() const { return granularEngine.getCurrentLevel(); }
 
 private:
     juce::AudioProcessorValueTreeState::ParameterLayout createParameters();
     void updateReverbParameters(float reverbValue);
+    void loadFactoryPreset(int index);
 
     GranularEngine granularEngine;
     

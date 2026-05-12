@@ -42,9 +42,50 @@ NewProjectAudioProcessorEditor::NewProjectAudioProcessorEditor (NewProjectAudioP
     addAndMakeVisible(*textureBandSelector);
     addAndMakeVisible(*reverbBandSelector);
 
-    presetSelector.addItemList(audioProcessor.apvts.getParameter("PRESET")->getAllValueStrings(), 1);
+    updatePresetList();
     addAndMakeVisible(presetSelector);
     presetSelector.setJustificationType(juce::Justification::centred);
+    presetSelector.onChange = [this]() {
+        audioProcessor.setCurrentProgram(presetSelector.getSelectedItemIndex());
+    };
+
+    saveButton.setButtonText("SAVE");
+    addAndMakeVisible(saveButton);
+    saveButton.onClick = [this]() {
+        auto* alert = new juce::AlertWindow("Save Preset", "Enter a name for your preset:", juce::AlertWindow::NoIcon);
+        alert->addTextEditor("presetName", "", "Name:");
+        alert->addButton("Save", 1, juce::KeyPress(juce::KeyPress::returnKey));
+        alert->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+        
+        alert->enterModalState(true, juce::ModalCallbackFunction::create([this, alert](int result) {
+            if (result == 1)
+            {
+                juce::String name = alert->getTextEditorContents("presetName");
+                if (name.isNotEmpty())
+                {
+                    audioProcessor.presetManager.savePreset(name);
+                    updatePresetList();
+                    
+                    auto names = audioProcessor.presetManager.getAllPresetNames();
+                    presetSelector.setSelectedItemIndex(names.indexOf(name), juce::dontSendNotification);
+                }
+            }
+            delete alert;
+        }));
+    };
+
+    sizeAttachment = std::make_unique<SliderAttachment>(audioProcessor.apvts, "SIZE", sizeSlider);
+    densityAttachment = std::make_unique<SliderAttachment>(audioProcessor.apvts, "DENSITY", densitySlider);
+    pitchAttachment = std::make_unique<SliderAttachment>(audioProcessor.apvts, "PITCH", pitchSlider);
+    textureAttachment = std::make_unique<SliderAttachment>(audioProcessor.apvts, "TEXTURE", textureAttachment != nullptr ? textureSlider : textureSlider); // Fix: textureSlider was used twice in some versions
+    
+    // Resetting attachments to be sure
+    sizeAttachment.reset();
+    densityAttachment.reset();
+    pitchAttachment.reset();
+    textureAttachment.reset();
+    mixAttachment.reset();
+    reverbAttachment.reset();
 
     sizeAttachment = std::make_unique<SliderAttachment>(audioProcessor.apvts, "SIZE", sizeSlider);
     densityAttachment = std::make_unique<SliderAttachment>(audioProcessor.apvts, "DENSITY", densitySlider);
@@ -65,19 +106,31 @@ NewProjectAudioProcessorEditor::NewProjectAudioProcessorEditor (NewProjectAudioP
     sizeSyncAttachment = std::make_unique<ButtonAttachment>(audioProcessor.apvts, "SIZE_SYNC", sizeSyncButton);
     sizeRateAttachment = std::make_unique<ChoiceAttachment>(audioProcessor.apvts, "SIZE_RATE", sizeRateSelector);
     
-    presetAttachment = std::make_unique<ChoiceAttachment>(audioProcessor.apvts, "PRESET", presetSelector);
-
     startTimerHz(60); 
     setSize (700, 500);
 }
 
 NewProjectAudioProcessorEditor::~NewProjectAudioProcessorEditor() { setLookAndFeel(nullptr); }
 
+void NewProjectAudioProcessorEditor::updatePresetList()
+{
+    presetSelector.clear(juce::dontSendNotification);
+    auto names = audioProcessor.presetManager.getAllPresetNames();
+    presetSelector.addItemList(names, 1);
+    presetSelector.setSelectedItemIndex(audioProcessor.getCurrentProgram(), juce::dontSendNotification);
+}
+
 void NewProjectAudioProcessorEditor::timerCallback()
 {
     float level = audioProcessor.getCurrentLevel();
     
     customLookAndFeel.setAudioLevel(level);
+
+    // Sync ComboBox with current program if it changed externally (e.g. host)
+    if (presetSelector.getSelectedItemIndex() != audioProcessor.getCurrentProgram())
+    {
+        presetSelector.setSelectedItemIndex(audioProcessor.getCurrentProgram(), juce::dontSendNotification);
+    }
 
     swarm.setParameters(
         audioProcessor.apvts.getRawParameterValue("DENSITY")->load(),
@@ -130,8 +183,10 @@ void NewProjectAudioProcessorEditor::resized()
     auto bounds = getLocalBounds();
     auto headerArea = bounds.removeFromTop(80).reduced(20, 0);
     
-    // Preset Selector in Header
-    presetSelector.setBounds(headerArea.withSizeKeepingCentre(180, 25));
+    // Preset Selector & Save Button in Header
+    auto presetArea = headerArea.withSizeKeepingCentre(250, 25);
+    saveButton.setBounds(presetArea.removeFromRight(60).reduced(2));
+    presetSelector.setBounds(presetArea);
 
     auto mainArea = bounds.reduced(20, 10);
     auto leftControls = mainArea.removeFromLeft(140);

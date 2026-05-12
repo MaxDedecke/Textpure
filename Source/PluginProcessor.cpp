@@ -8,6 +8,7 @@ NewProjectAudioProcessor::NewProjectAudioProcessor()
                         .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
                        ),
        apvts(*this, nullptr, "PARAMETERS", createParameters()),
+       presetManager(apvts),
        granularEngine(128)
 {
     apvts.addParameterListener("PRESET", this);
@@ -180,18 +181,45 @@ void NewProjectAudioProcessor::updateReverbParameters(float reverbValue)
 }
 
 const juce::String NewProjectAudioProcessor::getName() const { return JucePlugin_Name; }
-int NewProjectAudioProcessor::getNumPrograms() { return 6; }
+int NewProjectAudioProcessor::getNumPrograms() { return presetManager.getAllPresetNames().size(); }
 int NewProjectAudioProcessor::getCurrentProgram() { return (int)apvts.getRawParameterValue("PRESET")->load(); }
 const juce::String NewProjectAudioProcessor::getProgramName (int index) {
-    juce::StringArray names = { "Default", "Dark Clouds", "Digital Grit", "Ghost Melodies", "Subtle Texture", "Trap Shimmer" };
-    return names[index];
+    auto names = presetManager.getAllPresetNames();
+    if (index >= 0 && index < names.size()) return names[index];
+    return "Unknown";
 }
 void NewProjectAudioProcessor::changeProgramName (int index, const juce::String& newName) {}
 
 void NewProjectAudioProcessor::setCurrentProgram (int index)
 {
+    auto names = presetManager.getAllPresetNames();
+    if (index < 0 || index >= names.size()) return;
+
     isUpdatingPresets.store(true);
 
+    juce::String presetName = names[index];
+
+    // Try loading via PresetManager (User Presets)
+    if (!presetManager.loadPreset(presetName))
+    {
+        // Fallback to Factory Presets if not found in files
+        loadFactoryPreset(index);
+    }
+
+    // Update the PRESET parameter itself so the UI combo box reflects this change
+    auto* presetParam = apvts.getParameter("PRESET");
+    if (presetParam != nullptr)
+    {
+        float normalizedIndex = presetParam->getNormalisableRange().convertTo0to1((float)index);
+        if (presetParam->getValue() != normalizedIndex)
+            presetParam->setValueNotifyingHost(normalizedIndex);
+    }
+
+    isUpdatingPresets.store(false);
+}
+
+void NewProjectAudioProcessor::loadFactoryPreset(int index)
+{
     auto setParam = [this](juce::String id, float val) {
         auto* p = apvts.getParameter(id);
         if (p != nullptr)
@@ -202,16 +230,6 @@ void NewProjectAudioProcessor::setCurrentProgram (int index)
         if (p != nullptr)
             p->setValueNotifyingHost(val ? 1.0f : 0.0f);
     };
-
-    // Update the PRESET parameter itself so the UI combo box reflects this change
-    // (Crucial for when the host calls setCurrentProgram)
-    auto* presetParam = apvts.getParameter("PRESET");
-    if (presetParam != nullptr)
-    {
-        float normalizedIndex = presetParam->getNormalisableRange().convertTo0to1((float)index);
-        if (presetParam->getValue() != normalizedIndex)
-            presetParam->setValueNotifyingHost(normalizedIndex);
-    }
 
     if (index == 0) { // Default
         setParam("SIZE", 100.0f); setParam("DENSITY", 20.0f); setParam("PITCH", 1.0f); setParam("TEXTURE", 0.0f); setParam("MIX", 0.5f); setParam("REVERB", 0.3f);
@@ -238,8 +256,6 @@ void NewProjectAudioProcessor::setCurrentProgram (int index)
         setBool("SIZE_BYPASS", true); setBool("DENSITY_BYPASS", true); setBool("PITCH_BYPASS", true); setBool("TEXTURE_BYPASS", true); setBool("REVERB_BYPASS", true);
         setBool("SYNC", true); setParam("RATE", 5.0f); // 1/8D
     }
-
-    isUpdatingPresets.store(false);
 }
 
 juce::AudioProcessorEditor* NewProjectAudioProcessor::createEditor() { return new NewProjectAudioProcessorEditor (*this); }
