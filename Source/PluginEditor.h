@@ -112,8 +112,6 @@ private:
     
     std::unique_ptr<BandSpinner> granularBandSelector, textureBandSelector, reverbBandSelector;
     
-    juce::ComboBox presetSelector;
-
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
     using ChoiceAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
@@ -124,8 +122,6 @@ private:
     std::unique_ptr<ChoiceAttachment> sizeRateAttachment, rateAttachment;
 
     TextpureLookAndFeel customLookAndFeel;
-
-    void updatePresetList();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (NewProjectAudioProcessorEditor)
 };

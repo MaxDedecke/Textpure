@@ -8,24 +8,12 @@ NewProjectAudioProcessor::NewProjectAudioProcessor()
                         .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
                        ),
        apvts(*this, nullptr, "PARAMETERS", createParameters()),
-       presetManager(apvts),
        granularEngine(128)
 {
-    apvts.addParameterListener("PRESET", this);
 }
 
 NewProjectAudioProcessor::~NewProjectAudioProcessor() 
 {
-    apvts.removeParameterListener("PRESET", this);
-}
-
-void NewProjectAudioProcessor::parameterChanged (const juce::String& parameterID, float newValue)
-{
-    if (parameterID == "PRESET")
-    {
-        if (!isUpdatingPresets.load())
-            setCurrentProgram ((int)newValue);
-    }
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout NewProjectAudioProcessor::createParameters()
@@ -61,9 +49,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout NewProjectAudioProcessor::cr
     params.push_back(std::make_unique<juce::AudioParameterChoice>("GRANULAR_BAND", "Granular Band", bandList, 0));
     params.push_back(std::make_unique<juce::AudioParameterChoice>("REVERB_BAND", "Reverb Band", bandList, 0));
     params.push_back(std::make_unique<juce::AudioParameterChoice>("TEXTURE_BAND", "Texture Band", bandList, 0));
-
-    juce::StringArray presetList = { "Default", "Dark Clouds", "Digital Grit", "Ghost Melodies", "Subtle Texture", "Trap Shimmer" };
-    params.push_back(std::make_unique<juce::AudioParameterChoice>("PRESET", "Preset", presetList, 0));
 
     return { params.begin(), params.end() };
 }
@@ -181,83 +166,11 @@ void NewProjectAudioProcessor::updateReverbParameters(float reverbValue)
 }
 
 const juce::String NewProjectAudioProcessor::getName() const { return JucePlugin_Name; }
-int NewProjectAudioProcessor::getNumPrograms() { return presetManager.getAllPresetNames().size(); }
-int NewProjectAudioProcessor::getCurrentProgram() { return currentProgramIndex; }
-const juce::String NewProjectAudioProcessor::getProgramName (int index) {
-    auto names = presetManager.getAllPresetNames();
-    if (index >= 0 && index < names.size()) return names[index];
-    return "Unknown";
-}
+int NewProjectAudioProcessor::getNumPrograms() { return 1; }
+int NewProjectAudioProcessor::getCurrentProgram() { return 0; }
+const juce::String NewProjectAudioProcessor::getProgramName (int index) { return "Default"; }
 void NewProjectAudioProcessor::changeProgramName (int index, const juce::String& newName) {}
-
-void NewProjectAudioProcessor::setCurrentProgram (int index)
-{
-    auto names = presetManager.getAllPresetNames();
-    if (index < 0 || index >= names.size()) return;
-
-    isUpdatingPresets.store(true);
-    currentProgramIndex = index;
-
-    juce::String presetName = names[index];
-
-    // Try loading via PresetManager (User Presets)
-    if (!presetManager.loadPreset(presetName))
-    {
-        // Fallback to Factory Presets if not found in files
-        loadFactoryPreset(index);
-    }
-
-    // Update the PRESET parameter itself only if it's within the factory range (0-5)
-    auto* presetParam = apvts.getParameter("PRESET");
-    if (presetParam != nullptr && index < 6)
-    {
-        float normalizedIndex = presetParam->getNormalisableRange().convertTo0to1((float)index);
-        if (std::abs(presetParam->getValue() - normalizedIndex) > 0.001f)
-            presetParam->setValueNotifyingHost(normalizedIndex);
-    }
-
-    isUpdatingPresets.store(false);
-}
-
-void NewProjectAudioProcessor::loadFactoryPreset(int index)
-{
-    auto setParam = [this](juce::String id, float val) {
-        auto* p = apvts.getParameter(id);
-        if (p != nullptr)
-            p->setValueNotifyingHost(p->getNormalisableRange().convertTo0to1(val));
-    };
-    auto setBool = [this](juce::String id, bool val) {
-        auto* p = apvts.getParameter(id);
-        if (p != nullptr)
-            p->setValueNotifyingHost(val ? 1.0f : 0.0f);
-    };
-
-    if (index == 0) { // Default
-        setParam("SIZE", 100.0f); setParam("DENSITY", 20.0f); setParam("PITCH", 1.0f); setParam("TEXTURE", 0.0f); setParam("MIX", 0.5f); setParam("REVERB", 0.3f);
-        setBool("SIZE_BYPASS", true); setBool("DENSITY_BYPASS", true); setBool("PITCH_BYPASS", true); setBool("TEXTURE_BYPASS", true); setBool("REVERB_BYPASS", true);
-        setBool("SYNC", false);
-    } else if (index == 1) { // Dark Clouds
-        setParam("SIZE", 450.0f); setParam("DENSITY", 40.0f); setParam("PITCH", 0.5f); setParam("TEXTURE", 0.3f); setParam("MIX", 0.7f); setParam("REVERB", 0.6f);
-        setBool("SIZE_BYPASS", true); setBool("DENSITY_BYPASS", true); setBool("PITCH_BYPASS", true); setBool("TEXTURE_BYPASS", true); setBool("REVERB_BYPASS", true);
-        setBool("SYNC", false);
-    } else if (index == 2) { // Digital Grit
-        setParam("SIZE", 20.0f); setParam("DENSITY", 50.0f); setParam("PITCH", 1.2f); setParam("TEXTURE", 0.9f); setParam("MIX", 0.4f); setParam("REVERB", 0.1f);
-        setBool("SIZE_BYPASS", true); setBool("DENSITY_BYPASS", true); setBool("PITCH_BYPASS", true); setBool("TEXTURE_BYPASS", true); setBool("REVERB_BYPASS", true);
-        setBool("SYNC", true); setParam("RATE", 7.0f); // 1/16T
-    } else if (index == 3) { // Ghost Melodies
-        setParam("SIZE", 250.0f); setParam("DENSITY", 15.0f); setParam("PITCH", 2.0f); setParam("TEXTURE", 0.1f); setParam("MIX", 0.6f); setParam("REVERB", 0.8f);
-        setBool("SIZE_BYPASS", true); setBool("DENSITY_BYPASS", true); setBool("PITCH_BYPASS", true); setBool("TEXTURE_BYPASS", true); setBool("REVERB_BYPASS", true);
-        setBool("SYNC", false);
-    } else if (index == 4) { // Subtle Texture
-        setParam("SIZE", 80.0f); setParam("DENSITY", 10.0f); setParam("PITCH", 1.0f); setParam("TEXTURE", 0.5f); setParam("MIX", 0.2f); setParam("REVERB", 0.2f);
-        setBool("SIZE_BYPASS", true); setBool("DENSITY_BYPASS", true); setBool("PITCH_BYPASS", false); setBool("TEXTURE_BYPASS", true); setBool("REVERB_BYPASS", true);
-        setBool("SYNC", false);
-    } else if (index == 5) { // Trap Shimmer
-        setParam("SIZE", 150.0f); setParam("DENSITY", 30.0f); setParam("PITCH", 1.5f); setParam("TEXTURE", 0.2f); setParam("MIX", 0.5f); setParam("REVERB", 0.4f);
-        setBool("SIZE_BYPASS", true); setBool("DENSITY_BYPASS", true); setBool("PITCH_BYPASS", true); setBool("TEXTURE_BYPASS", true); setBool("REVERB_BYPASS", true);
-        setBool("SYNC", true); setParam("RATE", 5.0f); // 1/8D
-    }
-}
+void NewProjectAudioProcessor::setCurrentProgram (int index) {}
 
 juce::AudioProcessorEditor* NewProjectAudioProcessor::createEditor() { return new NewProjectAudioProcessorEditor (*this); }
 bool NewProjectAudioProcessor::hasEditor() const { return true; }

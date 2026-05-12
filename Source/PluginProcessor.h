@@ -1,16 +1,14 @@
-﻿#pragma once
+#pragma once
 
 #include <JuceHeader.h>
 #include "GranularEngine.h"
-#include "PresetManager.h"
 
 //==============================================================================
 /**
     The main AudioProcessor for the TEXTPURE plugin.
     Acts as an orchestrator between the host, the granular engine, and effects.
 */
-class NewProjectAudioProcessor  : public juce::AudioProcessor,
-                                 public juce::AudioProcessorValueTreeState::Listener
+class NewProjectAudioProcessor  : public juce::AudioProcessor
 {
 public:
     NewProjectAudioProcessor();
@@ -21,9 +19,6 @@ public:
     void releaseResources() override;
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
-
-    // --- APVTS::Listener Overrides ---
-    void parameterChanged (const juce::String& parameterID, float newValue) override;
 
     // --- UI and State ---
     juce::AudioProcessorEditor* createEditor() override;
@@ -45,23 +40,18 @@ public:
 
     // Public for Editor access
     juce::AudioProcessorValueTreeState apvts;
-    PresetManager presetManager;
     
     float getCurrentLevel() const { return granularEngine.getCurrentLevel(); }
 
 private:
     juce::AudioProcessorValueTreeState::ParameterLayout createParameters();
     void updateReverbParameters(float reverbValue);
-    void loadFactoryPreset(int index);
 
     GranularEngine granularEngine;
     
     juce::Reverb reverb;
     juce::Reverb::Parameters reverbParams;
     FrequencySplitter reverbFilter;
-
-    std::atomic<bool> isUpdatingPresets{ false };
-    int currentProgramIndex{ 0 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(NewProjectAudioProcessor)
 };

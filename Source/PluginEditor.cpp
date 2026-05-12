@@ -34,7 +34,6 @@ NewProjectAudioProcessorEditor::NewProjectAudioProcessorEditor (NewProjectAudioP
     addAndMakeVisible(sizeRateSelector);
     sizeRateSelector.setJustificationType(juce::Justification::centred);
 
-    syncButton.setButtonText(""); addAndMakeVisible(syncButton);
     rateSelector.addItemList(audioProcessor.apvts.getParameter("RATE")->getAllValueStrings(), 1);
     addAndMakeVisible(rateSelector);
     rateSelector.setJustificationType(juce::Justification::centred);
@@ -46,26 +45,6 @@ NewProjectAudioProcessorEditor::NewProjectAudioProcessorEditor (NewProjectAudioP
     addAndMakeVisible(*granularBandSelector);
     addAndMakeVisible(*textureBandSelector);
     addAndMakeVisible(*reverbBandSelector);
-
-    updatePresetList();
-    addAndMakeVisible(presetSelector);
-    presetSelector.setJustificationType(juce::Justification::centred);
-    presetSelector.onChange = [this]() {
-        audioProcessor.setCurrentProgram(presetSelector.getSelectedItemIndex());
-    };
-
-    sizeAttachment = std::make_unique<SliderAttachment>(audioProcessor.apvts, "SIZE", sizeSlider);
-    densityAttachment = std::make_unique<SliderAttachment>(audioProcessor.apvts, "DENSITY", densitySlider);
-    pitchAttachment = std::make_unique<SliderAttachment>(audioProcessor.apvts, "PITCH", pitchSlider);
-    textureAttachment = std::make_unique<SliderAttachment>(audioProcessor.apvts, "TEXTURE", textureAttachment != nullptr ? textureSlider : textureSlider); // Fix: textureSlider was used twice in some versions
-    
-    // Resetting attachments to be sure
-    sizeAttachment.reset();
-    densityAttachment.reset();
-    pitchAttachment.reset();
-    textureAttachment.reset();
-    mixAttachment.reset();
-    reverbAttachment.reset();
 
     sizeAttachment = std::make_unique<SliderAttachment>(audioProcessor.apvts, "SIZE", sizeSlider);
     densityAttachment = std::make_unique<SliderAttachment>(audioProcessor.apvts, "DENSITY", densitySlider);
@@ -92,25 +71,11 @@ NewProjectAudioProcessorEditor::NewProjectAudioProcessorEditor (NewProjectAudioP
 
 NewProjectAudioProcessorEditor::~NewProjectAudioProcessorEditor() { setLookAndFeel(nullptr); }
 
-void NewProjectAudioProcessorEditor::updatePresetList()
-{
-    presetSelector.clear(juce::dontSendNotification);
-    auto names = audioProcessor.presetManager.getAllPresetNames();
-    presetSelector.addItemList(names, 1);
-    presetSelector.setSelectedItemIndex(audioProcessor.getCurrentProgram(), juce::dontSendNotification);
-}
-
 void NewProjectAudioProcessorEditor::timerCallback()
 {
     float level = audioProcessor.getCurrentLevel();
     
     customLookAndFeel.setAudioLevel(level);
-
-    // Sync ComboBox with current program if it changed externally (e.g. host)
-    if (presetSelector.getSelectedItemIndex() != audioProcessor.getCurrentProgram())
-    {
-        presetSelector.setSelectedItemIndex(audioProcessor.getCurrentProgram(), juce::dontSendNotification);
-    }
 
     swarm.setParameters(
         audioProcessor.apvts.getRawParameterValue("DENSITY")->load(),
@@ -163,9 +128,6 @@ void NewProjectAudioProcessorEditor::resized()
     auto bounds = getLocalBounds();
     auto headerArea = bounds.removeFromTop(80).reduced(20, 0);
     
-    // Preset Selector in Header
-    presetSelector.setBounds(headerArea.withSizeKeepingCentre(190, 25));
-
     auto mainArea = bounds.reduced(20, 10);
     auto leftControls = mainArea.removeFromLeft(140);
     auto rightControls = mainArea.removeFromRight(140);
