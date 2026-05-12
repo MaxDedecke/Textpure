@@ -34,6 +34,11 @@ NewProjectAudioProcessorEditor::NewProjectAudioProcessorEditor (NewProjectAudioP
     addAndMakeVisible(sizeRateSelector);
     sizeRateSelector.setJustificationType(juce::Justification::centred);
 
+    syncButton.setButtonText(""); addAndMakeVisible(syncButton);
+    rateSelector.addItemList(audioProcessor.apvts.getParameter("RATE")->getAllValueStrings(), 1);
+    addAndMakeVisible(rateSelector);
+    rateSelector.setJustificationType(juce::Justification::centred);
+
     granularBandSelector = std::make_unique<BandSpinner>(audioProcessor.apvts, "GRANULAR_BAND");
     textureBandSelector = std::make_unique<BandSpinner>(audioProcessor.apvts, "TEXTURE_BAND");
     reverbBandSelector = std::make_unique<BandSpinner>(audioProcessor.apvts, "REVERB_BAND");
