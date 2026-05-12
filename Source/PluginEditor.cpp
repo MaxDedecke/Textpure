@@ -49,31 +49,6 @@ NewProjectAudioProcessorEditor::NewProjectAudioProcessorEditor (NewProjectAudioP
         audioProcessor.setCurrentProgram(presetSelector.getSelectedItemIndex());
     };
 
-    saveButton.setButtonText("SAVE");
-    addAndMakeVisible(saveButton);
-    saveButton.onClick = [this]() {
-        auto* alert = new juce::AlertWindow("Save Preset", "Enter a name for your preset:", juce::AlertWindow::NoIcon);
-        alert->addTextEditor("presetName", "", "Name:");
-        alert->addButton("Save", 1, juce::KeyPress(juce::KeyPress::returnKey));
-        alert->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
-        
-        alert->enterModalState(true, juce::ModalCallbackFunction::create([this, alert](int result) {
-            if (result == 1)
-            {
-                juce::String name = alert->getTextEditorContents("presetName");
-                if (name.isNotEmpty())
-                {
-                    audioProcessor.presetManager.savePreset(name);
-                    updatePresetList();
-                    
-                    auto names = audioProcessor.presetManager.getAllPresetNames();
-                    presetSelector.setSelectedItemIndex(names.indexOf(name), juce::dontSendNotification);
-                }
-            }
-            delete alert;
-        }));
-    };
-
     sizeAttachment = std::make_unique<SliderAttachment>(audioProcessor.apvts, "SIZE", sizeSlider);
     densityAttachment = std::make_unique<SliderAttachment>(audioProcessor.apvts, "DENSITY", densitySlider);
     pitchAttachment = std::make_unique<SliderAttachment>(audioProcessor.apvts, "PITCH", pitchSlider);
@@ -183,10 +158,8 @@ void NewProjectAudioProcessorEditor::resized()
     auto bounds = getLocalBounds();
     auto headerArea = bounds.removeFromTop(80).reduced(20, 0);
     
-    // Preset Selector & Save Button in Header
-    auto presetArea = headerArea.withSizeKeepingCentre(250, 25);
-    saveButton.setBounds(presetArea.removeFromRight(60).reduced(2));
-    presetSelector.setBounds(presetArea);
+    // Preset Selector in Header
+    presetSelector.setBounds(headerArea.withSizeKeepingCentre(190, 25));
 
     auto mainArea = bounds.reduced(20, 10);
     auto leftControls = mainArea.removeFromLeft(140);

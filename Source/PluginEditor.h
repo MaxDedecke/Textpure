@@ -113,7 +113,6 @@ private:
     std::unique_ptr<BandSpinner> granularBandSelector, textureBandSelector, reverbBandSelector;
     
     juce::ComboBox presetSelector;
-    juce::TextButton saveButton;
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
