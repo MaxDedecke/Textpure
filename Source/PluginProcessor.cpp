@@ -182,7 +182,7 @@ void NewProjectAudioProcessor::updateReverbParameters(float reverbValue)
 
 const juce::String NewProjectAudioProcessor::getName() const { return JucePlugin_Name; }
 int NewProjectAudioProcessor::getNumPrograms() { return presetManager.getAllPresetNames().size(); }
-int NewProjectAudioProcessor::getCurrentProgram() { return (int)apvts.getRawParameterValue("PRESET")->load(); }
+int NewProjectAudioProcessor::getCurrentProgram() { return currentProgramIndex; }
 const juce::String NewProjectAudioProcessor::getProgramName (int index) {
     auto names = presetManager.getAllPresetNames();
     if (index >= 0 && index < names.size()) return names[index];
@@ -196,6 +196,7 @@ void NewProjectAudioProcessor::setCurrentProgram (int index)
     if (index < 0 || index >= names.size()) return;
 
     isUpdatingPresets.store(true);
+    currentProgramIndex = index;
 
     juce::String presetName = names[index];
 
@@ -206,12 +207,12 @@ void NewProjectAudioProcessor::setCurrentProgram (int index)
         loadFactoryPreset(index);
     }
 
-    // Update the PRESET parameter itself so the UI combo box reflects this change
+    // Update the PRESET parameter itself only if it's within the factory range (0-5)
     auto* presetParam = apvts.getParameter("PRESET");
-    if (presetParam != nullptr)
+    if (presetParam != nullptr && index < 6)
     {
         float normalizedIndex = presetParam->getNormalisableRange().convertTo0to1((float)index);
-        if (presetParam->getValue() != normalizedIndex)
+        if (std::abs(presetParam->getValue() - normalizedIndex) > 0.001f)
             presetParam->setValueNotifyingHost(normalizedIndex);
     }
 

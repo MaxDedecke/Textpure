@@ -129,7 +129,6 @@ public:
             .withMinimumWidth(box.getWidth())
             .withMaximumNumColumns(1)
             .withStandardItemHeight(label.getHeight())
-            .withMaximumHeight(400) // Enable scrolling after 400px
             .withPreferredPopupDirection(juce::PopupMenu::Options::PopupDirection::downwards);
     }
 
@@ -139,9 +138,13 @@ public:
         juce::ignoreUnused(backgroundColour);
         auto bounds = button.getLocalBounds().toFloat();
         
+        // Draw an outline so it's always visible
+        g.setColour(juce::Colours::white.withAlpha(0.2f));
+        g.drawRoundedRectangle(bounds.reduced(0.5f), 2.0f, 1.0f);
+
         if (shouldDrawButtonAsDown || shouldDrawButtonAsHighlighted)
         {
-            g.setColour(juce::Colours::white.withAlpha(shouldDrawButtonAsDown ? 0.2f : 0.1f));
+            g.setColour(juce::Colours::white.withAlpha(shouldDrawButtonAsDown ? 0.3f : 0.15f));
             g.fillRoundedRectangle(bounds, 2.0f);
         }
     }

@@ -4,6 +4,12 @@
               addUsingNamespaceToJuceHeader="0" jucerFormatVersion="1">
   <MAINGROUP id="q3cu0k" name="Textpure">
     <GROUP id="{5A19F1A0-8C18-95CE-B73E-73B7061E811A}" name="Source">
+      <FILE id="vK4YvT" name="GranularEngine.cpp" compile="1" resource="0"
+            file="Source/GranularEngine.cpp"/>
+      <FILE id="xM2Z2A" name="GranularEngine.h" compile="0" resource="0" file="Source/GranularEngine.h"/>
+      <FILE id="j7Z7zB" name="ParticleSwarm.cpp" compile="1" resource="0"
+            file="Source/ParticleSwarm.cpp"/>
+      <FILE id="k8A8aC" name="ParticleSwarm.h" compile="0" resource="0" file="Source/ParticleSwarm.h"/>
       <FILE id="JyrcrS" name="PluginProcessor.cpp" compile="1" resource="0"
             file="Source/PluginProcessor.cpp"/>
       <FILE id="OFnYY8" name="PluginProcessor.h" compile="0" resource="0"
@@ -11,6 +17,9 @@
       <FILE id="WjeYFB" name="PluginEditor.cpp" compile="1" resource="0"
             file="Source/PluginEditor.cpp"/>
       <FILE id="l9Ti8u" name="PluginEditor.h" compile="0" resource="0" file="Source/PluginEditor.h"/>
+      <FILE id="m0N0nD" name="PresetManager.h" compile="0" resource="0" file="Source/PresetManager.h"/>
+      <FILE id="p1O1oE" name="TextpureLookAndFeel.h" compile="0" resource="0"
+            file="Source/TextpureLookAndFeel.h"/>
     </GROUP>
   </MAINGROUP>
   <MODULES>
